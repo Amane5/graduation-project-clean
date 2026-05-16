@@ -1,0 +1,95 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id         Int      @id @default(autoincrement())
+  email      String?  @unique
+  username   String   @unique
+  password   String
+  firstName  String
+  lastName   String?
+  type       String
+  isVerified Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  birthDate DateTime?
+  parentId  Int?
+
+  parent        User?          @relation("ParentChildren", fields: [parentId], references: [id])
+  children      User[]         @relation("ParentChildren")
+  fcmToken      String?
+  conversations Conversation[]
+
+  readingLevel    String?
+  responseLength  String?
+  learningStyle   String?
+  interests       String[]
+
+  tokenBalance    Int      @default(100000)
+  usedTokens      Int      @default(0)
+
+}
+
+model Otp {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  otp       String
+  type      String
+  expiresAt DateTime
+}
+
+model BlacklistedToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Question {
+  id               Int      @id @default(autoincrement())
+  question         String
+  imageDescription String?
+  voiceText        String?
+  answer           String
+  imageUrl         String?
+  audioUrl         String?
+  childId          Int
+  conversationId   Int
+  createdAt        DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model Conversation {
+  id           Int      @id @default(autoincrement())
+  childId      Int
+  child        User     @relation(fields: [childId], references: [id], onDelete: Cascade)
+  title        String?
+  createdAt    DateTime @default(now())
+  lastActivity DateTime @default(now())
+
+  questions Question[]
+}
+
+model TokenUsage {
+  id             Int      @id @default(autoincrement())
+
+  parentId       Int
+  childId        Int
+
+  inputTokens    Int
+  outputTokens   Int
+  totalTokens    Int
+
+  createdAt     DateTime @default(now())
+}
