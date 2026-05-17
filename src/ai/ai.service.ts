@@ -324,4 +324,42 @@ export class AiService {
       return false;
     }
   }
+
+async getTokenStats(userId: number) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      tokenBalance: true,
+      usedTokens: true,
+    },
+  });
+
+  const usages = await prisma.tokenUsage.findMany({
+    where: { parentId: userId },
+    orderBy: { createdAt: 'desc' },
+    take: 10,
+  });
+
+  const summary = await prisma.tokenUsage.aggregate({
+    where: { parentId: userId },
+    _sum: {
+      inputTokens: true,
+      outputTokens: true,
+      totalTokens: true,
+    },
+  });
+
+  return {
+    tokenBalance: user?.tokenBalance ?? 0,
+    usedTokens: user?.usedTokens ?? 0,
+
+    summary: {
+      totalInputTokens: summary._sum.inputTokens ?? 0,
+      totalOutputTokens: summary._sum.outputTokens ?? 0,
+      totalTokens: summary._sum.totalTokens ?? 0,
+    },
+
+    recentUsage: usages,
+  };
+}
 }

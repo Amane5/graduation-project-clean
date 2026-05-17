@@ -9,6 +9,8 @@ import {
   UseInterceptors,
   UploadedFiles,
   ForbiddenException,
+  Get,
+  Req,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { AiService } from './ai.service';
@@ -286,5 +288,13 @@ export class AiController {
     //   childId,
     //   conversationId: convId,
     // });
+  }
+
+  @Get('me/tokens')
+  @UseGuards(JwtAuthGuard)
+  async getMyTokens(@Req() req) {
+    const userId = req.user.sub
+    console.log('REQ USER:', req.user);
+    return this.aiService.getTokenStats(userId)
   }
 }
