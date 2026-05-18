@@ -4,6 +4,8 @@ import {
   IsOptional,
   IsDateString,
   MinLength,
+  IsIn,
+  IsArray,
 } from 'class-validator';
 
 export class UpdateChildDto {
@@ -27,4 +29,17 @@ export class UpdateChildDto {
   @IsDateString()
   @IsOptional()
   birthDate?: string;
+
+
+  @IsIn(['beginner', 'intermediate', 'advanced'])
+  readingLevel:string
+
+  @IsIn(['short', 'medium' , 'detailed'])
+  responseLength:string
+
+  @IsIn(['story', 'logical' , 'playful' , 'visual'])
+  learningStyle: string
+
+  @IsArray()
+  interests: string[]
 }

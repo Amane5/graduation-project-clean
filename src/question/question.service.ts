@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -183,27 +184,51 @@ export class QuestionService {
   //   };
   // }
 
-   async getConversationMessages(conversationId: number, childId:number) {
-        const messages = await prisma.question.findMany({
-          where: { conversationId , childId},
-          orderBy: { createdAt: 'asc' },
-          select: {
-            id: true,
-            question: true,
-            imageDescription: true,
-            voiceText: true,
-            answer: true,
-            createdAt: true,
-            audioUrl: true,
-            imageUrl: true,
-          },
-        });
-      
-        return {
-          message: 'messages fetched',
-          data: messages,
-        };
+  async getConversationMessages(conversationId: number, userId:number) {
+      const conversation = await prisma.conversation.findFirst({
+        where:{
+          id : conversationId, 
+          OR: [
+            {childId : userId},
+            {child : {
+              parentId: userId
+            }}
+          ] 
+        }
+      })
+      if(!conversation){
+        throw new ForbiddenException('Unauthorized access');
       }
+      const messages = await prisma.question.findMany({
+        where: { 
+          conversationId 
+          ,
+          // OR: [
+          //   {childId : userId},
+          //   {child : {
+          //     parentId: userId
+          //   }}
+          // ] 
+        },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          question: true,
+          imageDescription: true,
+          voiceText: true,
+          answer: true,
+          createdAt: true,
+          audioUrl: true,
+          imageUrl: true,
+        },
+      });
+    
+      return {
+        message: 'messages fetched',
+        data: messages,
+      };
+  }
+
   async saveAfterStream(data: {
     question: string;
     answer: string;

@@ -60,6 +60,7 @@ export class QuestionController {
       @UseGuards(JwtAuthGuard)
     @Get(':conversationId/messages')
     getMessages(@Param('conversationId') id:string, @Req() req){
-        return this.questionService.getConversationMessages(Number(id), req.user.sub)
+      const userId = req.user.sub
+      return this.questionService.getConversationMessages(Number(id), userId)
     }
 }

@@ -166,6 +166,11 @@ export class AiController {
     console.log('CONV ID:', convId);
     console.log('BODY:', body);
     console.log('conversationId FROM BODY:', conversationId);
+    const interests = Array.isArray(body.interests)
+    ? body.interests
+    : body.interests
+    ? [body.interests]
+    : [];
     const stream = await this.aiService.streamAnswer(
       finalQuestion,
       Number(age),
@@ -173,7 +178,7 @@ export class AiController {
       body.readingLevel,
       body.responseLength,
       body.learningStyle,
-      body.interests || [],
+      interests || [],
     );
 
     res.setHeader('Content-Type', 'text/event-stream');

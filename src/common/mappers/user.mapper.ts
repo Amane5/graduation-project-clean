@@ -7,6 +7,11 @@ export class UserMapper {
         type: user.type,
         firstName: user.firstName,
         lastName: user.lastName,
+        
+        readingLevel: user.readingLevel,
+        responseLength: user.responseLength,
+        learningStyle: user.learningStyle,
+        interests: user.interests,
       };
     }
   }
