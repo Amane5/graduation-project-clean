@@ -6,28 +6,27 @@ import { AiService } from 'src/ai/ai.service';
 export class ConversationService {
   constructor(private readonly aiService: AiService) {}
 
-  async createConversation(question: string, childId: number) {
+  async createConversation(question: string, userId: number) {
     const title = question
       ? await this.aiService.generateTitle(question)
       : 'New Chat';
 
     const conversation = await prisma.conversation.create({
       data: {
-        childId,
+        userId,
         title,
       },
     });
-    console.log('DTO:',  question );
-    console.log('titleeeeeeee', title)
+
     return {
       message: 'Conversation created',
       data: conversation,
     };
   }
 
-  async getConversations(childId: number) {
+  async getConversations(userId: number) {
     const conversations = await prisma.conversation.findMany({
-      where: { childId },
+      where: { userId },
       include: {
         questions: {
           orderBy: { createdAt: 'desc' },
@@ -52,14 +51,15 @@ export class ConversationService {
       const conv = await prisma.conversation.findFirst({
   where: {
     id: conversationId,
-    OR: [
-      { childId: userId },
-      {
-        child: {
-          parentId: userId,
-        },
-      },
-    ],
+    userId
+    // OR: [
+    //   { childId: userId },
+    //   {
+    //     child: {
+    //       parentId: userId,
+    //     },
+    //   },
+    // ],
   },
 });
 

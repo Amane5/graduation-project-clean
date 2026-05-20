@@ -12,7 +12,7 @@ import {
   Get,
   Req,
 } from '@nestjs/common';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { AiService } from './ai.service';
 import { QuestionService } from 'src/question/question.service';
 import { ConversationService } from '../conversation/conversation.service';
@@ -34,64 +34,23 @@ export class AiController {
     private readonly firebaseService: FirebaseService,
   ) {}
 
-  // @Post('stream')
-  // async stream(@Body() body: any, @Res() res: Response) {
-  //   const { question, age, childId, conversationId } = body;
+    private calculateAge(birthDate: Date): number {
+    const today = new Date();
+    const birth = new Date(birthDate);
 
-  //   let convId = conversationId;
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
 
-  //   if (!convId) {
-  //     const newConversation = await this.conversationService.createConversation(
-  //       { title: body.title },
-  //       childId,
-  //       // eslint-disable-next-line prettier/prettier
-  // );
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
 
-  //     convId = newConversation.data.id;
-  //   }
+    return age;
+  }
 
-  //   const stream = await this.aiService.streamAnswer(question, age);
-
-  //   res.setHeader('Content-Type', 'text/event-stream');
-  //   res.setHeader('Cache-Control', 'no-cache');
-  //   res.setHeader('Connection', 'keep-alive');
-
-  //   let fullText = '';
-  //   try {
-  //     for await (const event of stream) {
-  //       if (event.type === 'response.output_text.delta') {
-  //         const chunk = event.delta;
-
-  //         fullText += chunk;
-
-  //         res.write(`data: ${chunk}\n\n`);
-  //         console.log('STREAM:', chunk);
-  //       }
-
-  //       if (event.type === 'response.completed') {
-  //         // res.write(`event: done\ndata: done\n\n`);
-  //         res.write(`data: [DONE]\n\n`);
-  //       }
-  //     }
-  //   } catch (error) {
-  //     res.write(`event: error\ndata: error\n\n`);
-  //   }
-
-  //   res.end();
-  //   await this.questionService.saveAfterStream({
-  //     question,
-  //     answer: fullText,
-  //     childId,
-  //     conversationId: convId,
-  //   });
-  //   // await this.firebaseService.sendNotification(
-  //   //     userDeviceToken,
-  //   //     'New Answer Ready',
-  //   //     'Your AI response is ready!'
-  //   // )
-  // }
 
   @Post('stream')
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(
     FilesInterceptor('files', 5, {
       storage: diskStorage({
@@ -108,23 +67,54 @@ export class AiController {
     @Body() body: any,
     @UploadedFiles() files: Express.Multer.File[],
     @Res() res: Response,
+    @Req() req
   ) {
-    const { question, age, childId, conversationId } = body;
+    const { question, conversationId } = body;
 
     let finalQuestion = question || '';
     let imageDescription = '';
     let audioTranscription = '';
+  
+    const userId = req.user.sub;
+    console.log(req.user);
+    const currentUser = await prisma.user.findUnique({
+      where:{id: userId}
+    }) 
 
-    const child = await prisma.user.findUnique({
-      where: { id: Number(childId) },
-    });
-    const parent = await prisma.user.findUnique({
-      where: { id : Number(child?.parentId) }
-    })
-
-    if(!parent || parent.tokenBalance <= 0) {
-      throw new ForbiddenException('Token limit exceeded')
+    if (!currentUser || currentUser.tokenBalance <= 0) {
+    console.log('Token balance:', currentUser?.tokenBalance);
+    console.log('User:', currentUser);
+    throw new ForbiddenException('Token limit exceeded');
     }
+
+    const age = currentUser.birthDate
+    ? this.calculateAge(currentUser.birthDate)
+    : 10;
+
+    const firstName = currentUser.firstName;
+
+    const readingLevel = currentUser.readingLevel || '';
+
+    const responseLength = currentUser.responseLength || '';
+
+    const learningStyle = currentUser.learningStyle || '';
+
+    const interests = currentUser.interests || [];
+
+    const blockedTopics = currentUser.blockedTopics || [];
+
+    if (conversationId) {
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        id: Number(conversationId),
+        userId,
+      },
+    });
+
+    if (!conversation) {
+      throw new ForbiddenException('Unauthorized conversation');
+    }
+  }
 
     // PROCESS FILES
     if (files && files.length > 0) {
@@ -157,7 +147,7 @@ export class AiController {
     if (!convId) {
       const newConversation = await this.conversationService.createConversation(
         question,
-        childId,
+        userId,
       );
 
       convId = newConversation.data.id;
@@ -166,19 +156,26 @@ export class AiController {
     console.log('CONV ID:', convId);
     console.log('BODY:', body);
     console.log('conversationId FROM BODY:', conversationId);
-    const interests = Array.isArray(body.interests)
-    ? body.interests
-    : body.interests
-    ? [body.interests]
-    : [];
+    // const interests = Array.isArray(body.interests)
+    //   ? body.interests
+    //   : body.interests
+    //     ? [body.interests]
+    //     : [];
+    // const blockedTopics = Array.isArray(body.blockedTopics)
+    //   ? body.blockedTopics
+    //   : body.blockedTopics
+    //     ? [body.blockedTopics]
+    //     : [];
     const stream = await this.aiService.streamAnswer(
       finalQuestion,
       Number(age),
+      currentUser.firstName,
       Number(convId),
-      body.readingLevel,
-      body.responseLength,
-      body.learningStyle,
-      interests || [],
+      readingLevel,
+      responseLength,
+      learningStyle,
+      interests,
+      blockedTopics,
     );
 
     res.setHeader('Content-Type', 'text/event-stream');
@@ -234,37 +231,37 @@ export class AiController {
       res.write(`event: done\n`);
       res.write(`data: done\n\n`);
 
-      const finalResponse = await stream.finalResponse()
-      const usage = finalResponse.usage
-      console.log(usage)
-      const totalTokens = usage?.total_tokens || 0
-      const inputTokens = usage?.input_tokens || 0
-      const outputTokens = usage?.output_tokens || 0
+      const finalResponse = await stream.finalResponse();
+      const usage = finalResponse.usage;
+      console.log(usage);
+      const totalTokens = usage?.total_tokens || 0;
+      const inputTokens = usage?.input_tokens || 0;
+      const outputTokens = usage?.output_tokens || 0;
       await prisma.user.update({
-        where: { id: parent.id },
+        where: { id: userId },
         data: {
-          tokenBalance:{
-            decrement: totalTokens
+          tokenBalance: {
+            decrement: totalTokens,
           },
           usedTokens: {
-            increment: totalTokens
-          }
-        }
-      })
+            increment: totalTokens,
+          },
+        },
+      });
 
       await prisma.tokenUsage.create({
-        data:{
-          parentId: parent.id,
-          childId: Number(child?.id),
+        data: {
+          parentId: userId,
+          childId: Number(userId),
 
           inputTokens,
           outputTokens,
           totalTokens,
-        }
-      })
-      console.log('input tokens:' , inputTokens)
-      console.log('output tokens:' , outputTokens)
-      console.log('total tokens:' , totalTokens)
+        },
+      });
+      console.log('input tokens:', inputTokens);
+      console.log('output tokens:', outputTokens);
+      console.log('total tokens:', totalTokens);
     } catch (error) {
       console.error(error);
 
@@ -276,7 +273,6 @@ export class AiController {
       await this.questionService.saveAfterStream({
         question: question || '',
         answer: fullText,
-        childId: Number(childId),
         conversationId: Number(convId),
         audioUrl,
         imageUrl,
@@ -286,20 +282,13 @@ export class AiController {
     }
     res.end();
 
-    // SAVE AFTER STREAM
-    // await this.questionService.saveAfterStream({
-    //   question: question || '',
-    //   answer: fullText,
-    //   childId,
-    //   conversationId: convId,
-    // });
   }
 
   @Get('me/tokens')
   @UseGuards(JwtAuthGuard)
   async getMyTokens(@Req() req) {
-    const userId = req.user.sub
+    const userId = req.user.sub;
     console.log('REQ USER:', req.user);
-    return this.aiService.getTokenStats(userId)
+    return this.aiService.getTokenStats(userId);
   }
 }

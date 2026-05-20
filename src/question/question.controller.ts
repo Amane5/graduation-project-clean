@@ -21,46 +21,38 @@ import { extname } from 'path';
 export class QuestionController {
   constructor(private readonly questionService: QuestionService) {}
 
-  @Post()
-  @UseGuards(JwtAuthGuard)
-  @UseInterceptors(
-    FilesInterceptor('files', 5, {
-      storage: diskStorage({
-        destination: './uploads',
-        filename: (req, file, cb) => {
-          const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1e9);
-
-          cb(null, uniqueName + extname(file.originalname));
-        },
-      }),
-    }),
-  )
-  async askQuestion(
-    @Body() body: AskQuestionDto,
-    @UploadedFiles() files: any[],
-    @Req() req,
-  ) {
-    return this.questionService.handleQuestion(
-      body,
-      body.question,
-      req.user.sub,
-      files,
-    );
-  }
-
+  // @Post()
   // @UseGuards(JwtAuthGuard)
-  // @Get(':conversationId/messages')
-  // getMessages(@Param('conversationId') id: string, @Req() req) {
-  //   return this.questionService.getConversationMessages(
-  //     Number(id),
+  // @UseInterceptors(
+  //   FilesInterceptor('files', 5, {
+  //     storage: diskStorage({
+  //       destination: './uploads',
+  //       filename: (req, file, cb) => {
+  //         const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1e9);
+
+  //         cb(null, uniqueName + extname(file.originalname));
+  //       },
+  //     }),
+  //   }),
+  // )
+  // async askQuestion(
+  //   @Body() body: AskQuestionDto,
+  //   @UploadedFiles() files: any[],
+  //   @Req() req,
+  // ) {
+  //   return this.questionService.handleQuestion(
+  //     body,
+  //     body.question,
   //     req.user.sub,
-  //     req.user.type,
+  //     files,
   //   );
   // }
-      @UseGuards(JwtAuthGuard)
+
+
+    @UseGuards(JwtAuthGuard)
     @Get(':conversationId/messages')
     getMessages(@Param('conversationId') id:string, @Req() req){
       const userId = req.user.sub
-      return this.questionService.getConversationMessages(Number(id), userId)
+      return this.questionService.getConversationMessages(Number(id), userId, req.user.type)
     }
 }

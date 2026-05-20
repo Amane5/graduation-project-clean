@@ -34,6 +34,7 @@ model User {
   responseLength  String?
   learningStyle   String?
   interests       String[]
+  blockedTopics     String[]
 
   tokenBalance    Int      @default(100000)
   usedTokens      Int      @default(0)
@@ -63,7 +64,7 @@ model Question {
   answer           String
   imageUrl         String?
   audioUrl         String?
-  childId          Int
+  // childId          Int
   conversationId   Int
   createdAt        DateTime @default(now())
 
@@ -72,8 +73,10 @@ model Question {
 
 model Conversation {
   id           Int      @id @default(autoincrement())
-  childId      Int
-  child        User     @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   title        String?
   createdAt    DateTime @default(now())
   lastActivity DateTime @default(now())

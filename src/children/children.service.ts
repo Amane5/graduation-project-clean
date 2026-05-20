@@ -128,6 +128,7 @@ export class ChildrenService {
         responseLength: dto.responseLength,
         learningStyle: dto.learningStyle,
         interests: dto.interests,
+        blockedTopics: dto.blockedTopics || [],
       },
     });
     return {

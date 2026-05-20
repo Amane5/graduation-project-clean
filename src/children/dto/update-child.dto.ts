@@ -42,4 +42,8 @@ export class UpdateChildDto {
 
   @IsArray()
   interests: string[]
+
+  @IsArray()
+  @IsOptional()
+  blockedTopics: string[]
 }

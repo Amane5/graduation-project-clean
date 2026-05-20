@@ -27,15 +27,15 @@ export class ConversationController {
   @Post()
   @UseGuards(JwtAuthGuard)
   create(@Req() req, @Body('question') question: string) {
-    const childId = Number(req.user.sub);
+    const userId = Number(req.user.sub);
 
-    return this.conversationService.createConversation(question, childId);
+    return this.conversationService.createConversation(question, userId);
   }
 
   @UseGuards(JwtAuthGuard)
-  @Get(':childId')
-  getAll(@Param('childId') childId: string) {
-    return this.conversationService.getConversations(Number(childId));
+  @Get(':userId')
+  getAll(@Param('userId') userId: string) {
+    return this.conversationService.getConversations(Number(userId));
   }
 
   @UseGuards(JwtAuthGuard)

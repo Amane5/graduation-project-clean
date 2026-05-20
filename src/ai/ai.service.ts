@@ -53,11 +53,13 @@ export class AiService {
   async streamAnswer(
     question: string,
     age: number,
+    firstName: string,
     conversationId: number,
     readingLevel:string,
     responseLength:string,
     learningStyle:string,
     interests:string[],
+    blockedTopics:string[],
   ) {
     
     console.log('STREAM ANSWER CALLED');
@@ -117,10 +119,12 @@ export class AiService {
 
             Rules:
             - Always answer according to the child's age: ${age}
+            -Always answer according to the child's name:${firstName}
             - Reading level: ${readingLevel}
             - Response length: ${responseLength}
             - Learning style: ${learningStyle}
             - Interests: ${interests.join(', ')}
+            - Blocked topics: ${blockedTopics.join(', ')}
             - Use very simple words for younger children
             - Use short sentences for very young children
             - Use fun examples children can understand
@@ -132,6 +136,7 @@ export class AiService {
             - Keep answers age appropriate
             - Use the preferred learning style
             - Include interests in examples when relevant
+            -avoid blocked topics and steer conversation away from them
             - Keep explanations fun and engaging
             - Be warm, kind, and encouraging
             - Use conversation history for follow-up questions

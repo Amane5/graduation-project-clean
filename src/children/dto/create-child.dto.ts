@@ -34,4 +34,8 @@ export class CreateChildDto {
 
   @IsArray()
   interests: string[]
+
+  @IsArray()
+  @IsOptional()
+  blockedTopics: string[]
 }

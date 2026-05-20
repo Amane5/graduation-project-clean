@@ -3,10 +3,10 @@ import { prisma } from '@/lib/prisma';
 
 @Injectable()
 export class HistoryService {
-  async getHistory(parentId: number, childId: number) {
+  async getHistory(parentId: number, userId: number) {
     const child = await prisma.user.findFirst({
       where: {
-        id: childId,
+        id: userId,
         parentId: parentId,
       },
     });
@@ -16,7 +16,7 @@ export class HistoryService {
     }
 
     const conversations = await prisma.conversation.findMany({
-      where: { childId },
+      where: { userId },
       orderBy: { lastActivity: 'desc' },
     });
     return conversations ?? [];

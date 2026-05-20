@@ -7,10 +7,11 @@ export class EmailService {
 
   constructor() {
     this.transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'sandbox.smtp.mailtrap.io',
+      port: 2525,
       auth: {
-        user: 'amany.tan2004@gmail.com',
-        pass: 'opjflvrjnxawgtno',
+        user: '7fc7e75cc95464',
+        pass: '43f646558ccc63',
       },
     });
   }
