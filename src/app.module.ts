@@ -7,9 +7,10 @@ import { AuthModule } from './auth/auth.module';
 import { ChildrenModule } from './children/children.module';
 import { ConversationModule } from './conversation/conversation.module';
 import { HistoryModule } from './history/history.module';
+import { StoryModule } from './story/story.module';
 
 
 @Module({
-  imports: [QuestionModule, AiModule, AuthModule, ChildrenModule, ConversationModule, HistoryModule],
+  imports: [QuestionModule, AiModule, AuthModule, ChildrenModule, ConversationModule, HistoryModule, StoryModule],
 })
 export class AppModule {}

@@ -38,7 +38,7 @@ model User {
 
   tokenBalance    Int      @default(100000)
   usedTokens      Int      @default(0)
-
+  stories Story[]
 }
 
 model Otp {
@@ -95,4 +95,51 @@ model TokenUsage {
   totalTokens    Int
 
   createdAt     DateTime @default(now())
+}
+
+enum StoryStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model Story {
+  id                Int           @id @default(autoincrement())
+  title             String
+  content           String       
+
+  educationalGoal   String
+  storyType         String
+  storyLength       String
+
+  hasImages         Boolean       @default(false)
+  hasAudio          Boolean       @default(false)
+
+  audioUrl          String?
+
+  status            StoryStatus   @default(DRAFT)
+
+  childId           Int
+  child             User          @relation(fields: [childId], references: [id])
+
+  scenes            StoryScene[]
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+model StoryScene {
+  id          Int      @id @default(autoincrement())
+
+  storyId     Int
+  story       Story    @relation(fields: [storyId], references: [id])
+
+  sceneOrder  Int
+
+  title       String?
+  content     String   
+
+  imagePrompt String?
+  imageUrl    String?
+
+  createdAt   DateTime @default(now())
 }
