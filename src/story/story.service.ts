@@ -26,7 +26,6 @@ export class StoryService {
   async generateStory(dto: CreateStoryDto, userId: number) {
     const child = await prisma.user.findFirst({
       where: { id: dto.childId , parentId: userId },
-
     });
 
     if (!child) {
@@ -51,7 +50,11 @@ export class StoryService {
     const aiResponse = await this.aiService.generateStory(prompt);
     console.log(aiResponse);
 
-    const parsed = JSON.parse(aiResponse);
+    const cleaned = aiResponse
+  .replace(/```json/g, "")
+  .replace(/```/g, "")
+  .trim();
+    const parsed = JSON.parse(cleaned);
 
     const story = await prisma.story.create({
       data: {
@@ -116,11 +119,10 @@ ${parsed.scenes
     }
     return { story: {
     id: story.id,
-
+    childId:story.childId,
     title: story.title,
-
+    status:story.status,
     content: story.content,
-
     audioUrl: audioUrl,
   }, scenes: savedScenes };
   }
@@ -144,7 +146,7 @@ ${parsed.scenes
     content: story.content,
 
     audioUrl: story.audioUrl,
-
+    status:story.status,
     scenes: story.scenes.map((scene) => ({
       id: scene.id,
 
@@ -188,12 +190,15 @@ ${parsed.scenes
     return stories.map((story) => ({
     id: story.id,
 
+    childId:story.childId,
+
     title: story.title,
 
     content: story.content,
 
     audioUrl: story.audioUrl,
 
+    status:story.status,
     scenes: story.scenes.map((scene) => ({
       id: scene.id,
 
@@ -302,4 +307,29 @@ ${parsed.scenes
     scenes: updatedScenes,
   };
   }
+
+async approveStory(parentId:number , storyId:number){
+
+    const story = await prisma.story.findFirst({
+        where:{id:storyId},
+        include:{child:true}
+    })
+
+    if(!story){
+        throw new NotFoundException('Story not found')
+    }
+
+    if(story.child.parentId !== parentId){
+        throw new ForbiddenException('Unauthorized')
+    }
+
+    const updatedStory = await prisma.story.update({
+        where:{id:storyId},
+        data:{
+            status:'PUBLISHED'
+        }
+    })
+
+    return updatedStory
+}
 }

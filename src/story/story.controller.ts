@@ -1,5 +1,5 @@
 import { JwtAuthGuard } from '@/auth/guards/jwt.guard';
-import { Body, Controller, Get, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, Req, UseGuards } from '@nestjs/common';
 import { CreateStoryDto } from './Dto/create-story.dto';
 import { StoryService } from './story.service';
 import { UpdateStoryDto } from './Dto/update-story.dto';
@@ -35,6 +35,19 @@ export class StoryController {
         @Body() dto:UpdateStoryDto,
         @Param('id') storyId : string){
             return this.storyService.updateStory(req.user.sub , dto , Number(storyId))
-        }
+    }
+
+    //approve story
+    @Patch(':id/approve')
+    @UseGuards(JwtAuthGuard)
+    async approveStory(
+    @Req() req,
+    @Param('id') id: string,
+    ){
+    return this.storyService.approveStory(
+        req.user.sub,
+        Number(id),
+    )
+    }
 
 }
