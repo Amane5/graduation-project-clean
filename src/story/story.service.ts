@@ -407,7 +407,11 @@ const transcript =
         where:{id: storyId},
         data:{
             title:dto.title,
-            content:dto.content
+            content:dto.content,
+
+            status: "DRAFT",
+            isApproved: false,
+            questionsApproved: false,
         }
     })
 
@@ -476,6 +480,9 @@ const transcript =
       content: updatedStory?.content,
 
       audioUrl: updatedStory?.audioUrl,
+      status: "DRAFT",
+      isApproved: false,
+      questionsApproved: false
     },
 
     scenes: updatedScenes,
@@ -585,6 +592,10 @@ const transcript =
             title: parsed.title,
 
             content: parsed.content,
+
+            status: "DRAFT",
+            isApproved: false,
+            questionsApproved: false,
             },
         });
 
@@ -689,6 +700,9 @@ const transcript =
         content: parsed.content,
 
         audioUrl: updatedAudioUrl,
+        status: "DRAFT",
+        isApproved: false,
+        questionsApproved: false
         },
 
         scenes: savedScenes,
@@ -723,6 +737,7 @@ const transcript =
             sceneOrder: 'asc',
           },
         },
+        questions:true
       },
 
       orderBy: {
@@ -763,6 +778,7 @@ const transcript =
           scene.imageUrl,
       }),
     ),
+    questions:story.questions
   }));
     }
 

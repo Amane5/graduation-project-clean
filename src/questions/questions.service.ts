@@ -4,6 +4,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { CreateQuestionDto } from './dto/create-questions.dto';
 import { UpdateQuestionDto } from './dto/update-questions.dto';
 import { buildQuestionsPrompt } from './prompt/question.prompt';
+import { buildRegenerateQuestionsPrompt } from './prompt/regenerateQuestion.prompt';
 
 @Injectable()
 export class QuestionsService {
@@ -249,6 +250,8 @@ console.log('QUESTION:', dto.question);
         },
         include: {
         child: true,
+        scenes:true,
+        questions:true
         },
         });
 
@@ -264,6 +267,10 @@ console.log('QUESTION:', dto.question);
             );
         }
 
+        const prompt = buildRegenerateQuestionsPrompt(
+            story,
+            story.questions
+        );
         await prisma.storyQuestion.deleteMany({
             where: {
             storyId,
