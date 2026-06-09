@@ -1,8 +1,8 @@
 import { JwtAuthGuard } from '@/auth/guards/jwt.guard';
-import { Body, Controller, Get, Param, Patch, Post, Put, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Req, UseGuards } from '@nestjs/common';
 import { CreateStoryDto } from './Dto/create-story.dto';
 import { StoryService } from './story.service';
-import { UpdateStoryDto } from './Dto/update-story.dto';
+import { AiEditStoryDto, UpdateStoryDto } from './Dto/update-story.dto';
 @Controller('story')
 export class StoryController {
     constructor(private readonly storyService:StoryService){}
@@ -25,6 +25,13 @@ export class StoryController {
     @UseGuards(JwtAuthGuard)
     async getChildStories(@Req() req, @Param('childId') childId:string){
         return this.storyService.getChildStories(req.user.sub , Number(childId))
+    }
+
+    //for parent to see all children's stories 
+    @Get('children')
+    @UseGuards(JwtAuthGuard)
+    async getAllChildrenStories(@Req() req ){
+        return this.storyService.getAllChildrenStories(req.user.sub)
     }
 
     //update story
@@ -50,4 +57,24 @@ export class StoryController {
     )
     }
 
+    //edit story by ai 
+    @Post(':id/ai-edit')
+    @UseGuards(JwtAuthGuard)
+    async updateStoryWithAi (@Req() req , @Body() body:any, @Param('id') storyId:string){
+          console.log("BODY RECEIVED:", AiEditStoryDto);
+        return this.storyService.updateStoryWithAi(req.user.sub , body.editRequest, Number(storyId))
+    }
+
+    //delete story
+    @Delete(':storyId')
+    @UseGuards(JwtAuthGuard)
+    async deleteStory(@Param('storyId') storyId:string ,@Req() req){
+        return this.storyService.deleteStory(Number(storyId), req.user.sub)
+    }
+
+    @Get(':id/edit-message')
+    @UseGuards(JwtAuthGuard)
+    async getEditMessages(@Req() req , @Param('id') storyId:string){
+        return this.storyService.getEditMessages(req.user.sub , Number(storyId))
+    }
 }

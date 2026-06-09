@@ -1,6 +1,9 @@
+import { Story } from "@prisma/client"
+
 interface StoryPromptData {
     age:number
     firstName:string
+    gender:string
     interests:string[]
     blockedTopics:string[]
 
@@ -19,6 +22,7 @@ Rules:
 - Generate an age appropriate story
 - Child age: ${data.age}
 - First name:${data.firstName}
+- Child gender:${data.gender}
 - Interests: ${data.interests.join(', ')}
 - Blocked topics: ${data.blockedTopics.join(', ')}
 
@@ -51,3 +55,85 @@ JSON format:
 }
 `;
 }
+
+type EditStoryInput = {
+  currentStory: any;
+  editRequest: string;
+};
+
+    export const promptModification = (
+  data: EditStoryInput,
+): string => {
+
+  const simplifiedStory = {
+    title: data.currentStory.title,
+
+    content: data.currentStory.content,
+
+    educationalGoal:
+      data.currentStory.educationalGoal,
+
+    child: {
+      firstName: data.currentStory.child.firstName,
+      gender:data.currentStory.child.gender,
+      interests:
+        data.currentStory.child.interests,
+
+      blockedTopics:
+        data.currentStory.child.blockedTopics,
+    },
+
+    scenes: data.currentStory.scenes.map(
+      (scene: any) => ({
+        sceneOrder: scene.sceneOrder,
+
+        title: scene.title,
+
+        content: scene.content,
+
+        imagePrompt: scene.imagePrompt,
+      }),
+    ),
+  };
+
+  return `
+You are an AI editor for children's educational stories.
+
+Your task:
+Modify the existing story according to the parent's request.
+
+IMPORTANT RULES:
+- Follow the parent's request exactly
+- Preserve all unchanged text exactly
+-Speak to the child according to his gender
+- Do not make unrelated edits
+- If the request is word replacement, replace all occurrences consistently
+- If the request is small, do only the requested change
+- Keep the same educational goal
+- Preserve the child's interests and age appropriateness
+- Keep scene structure unchanged unless requested
+- Keep image prompts unchanged unless visuals changed
+- Return ONLY valid JSON
+
+Current story:
+${JSON.stringify(simplifiedStory)}
+
+Parent request:
+${data.editRequest}
+
+JSON format:
+{
+  "title": "",
+  "content": "",
+  "scenes": [
+    {
+      "sceneOrder": 1,
+      "title": "",
+      "content": "",
+      "imagePrompt": ""
+    }
+  ],
+  "summaryOfChanges": ""
+}
+`;
+};

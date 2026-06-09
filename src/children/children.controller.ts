@@ -31,7 +31,6 @@ export class ChildrenController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('parent')
   deleteChild(@Param('id') id: string, @Req() req) {
-    console.log('Deleting child with ID:', id, 'for parent ID:', req.user.sub);
     return this.childrenService.deleteChild(Number(id), req.user.sub);
   }
 

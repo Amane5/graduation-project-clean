@@ -1,0 +1,59 @@
+import { JwtAuthGuard } from '@/auth/guards/jwt.guard';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Req, UseGuards } from '@nestjs/common';
+import { QuestionsService } from './questions.service';
+import { CreateQuestionDto } from './dto/create-questions.dto';
+import { UpdateQuestionDto } from './dto/update-questions.dto';
+
+@Controller('questions')
+export class QuestionsController {
+    constructor(private readonly questionsService: QuestionsService){}
+
+    //generate questions for a story
+    @Post('story/:storyId/generate')
+    @UseGuards(JwtAuthGuard)
+    async generateQuestion(@Req() req,@Param('storyId') storyId:string){
+        return this.questionsService.generateQuestion(req.user.sub, Number(storyId))
+    }
+
+    //get questions for a story 
+    @Get('story/:storyId')
+    @UseGuards(JwtAuthGuard)
+    async getQuestions(@Req() req,@Param('storyId') storyId:string){
+        return this.questionsService.getQuestions(req.user.sub, Number(storyId))
+    }
+
+    //add question to a story
+    @Post('story/:storyId/add')
+    @UseGuards(JwtAuthGuard)
+    async addQuestion(@Req() req,@Param('storyId') storyId:string , @Body() dto:CreateQuestionDto){
+        return this.questionsService.addQuestion(req.user.sub, Number(storyId), dto)
+    }
+
+    //edit question 
+    @Put(':questionId')
+    @UseGuards(JwtAuthGuard)
+    async updateQuestion(@Req() req,@Param('questionId') questionId:string , @Body() dto:UpdateQuestionDto){
+        return this.questionsService.updateQuestion(req.user.sub, Number(questionId), dto)
+    }
+
+    //delete question
+    @Delete(':questionId')
+    @UseGuards(JwtAuthGuard)
+    async deleteQuestion(@Req() req,@Param('questionId') questionId:string){
+        return this.questionsService.deleteQuestion(req.user.sub, Number(questionId))
+    }
+
+    //approve questions for a story
+    @Patch('story/:storyId/approve')
+    @UseGuards(JwtAuthGuard)
+    async approveQuestions(@Req() req,@Param('storyId') storyId:string){
+        return this.questionsService.approveQuestions(req.user.sub, Number(storyId))
+    }
+
+    //regenerate questions if the parent update the story after approval
+    @Post('story/:storyId/regenerate')
+    @UseGuards(JwtAuthGuard)
+    async regenerateQuestions(@Req() req,@Param('storyId') storyId:string){
+        return this.questionsService.regenerateQuestions(req.user.sub, Number(storyId))
+    }
+}

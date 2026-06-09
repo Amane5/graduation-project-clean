@@ -23,6 +23,7 @@ import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { AskQuestionDto } from '@/question/dto/ask-question.dto';
 import { prisma } from '@/lib/prisma';
+import { JsonWebTokenError } from '@nestjs/jwt';
 
 @Controller('ai')
 export class AiController {
@@ -34,7 +35,7 @@ export class AiController {
     private readonly firebaseService: FirebaseService,
   ) {}
 
-    private calculateAge(birthDate: Date): number {
+  private calculateAge(birthDate: Date): number {
     const today = new Date();
     const birth = new Date(birthDate);
 
@@ -47,7 +48,6 @@ export class AiController {
 
     return age;
   }
-
 
   @Post('stream')
   @UseGuards(JwtAuthGuard)
@@ -67,29 +67,29 @@ export class AiController {
     @Body() body: any,
     @UploadedFiles() files: Express.Multer.File[],
     @Res() res: Response,
-    @Req() req
+    @Req() req,
   ) {
     const { question, conversationId } = body;
 
     let finalQuestion = question || '';
     let imageDescription = '';
     let audioTranscription = '';
-  
+
     const userId = req.user.sub;
     console.log(req.user);
     const currentUser = await prisma.user.findUnique({
-      where:{id: userId}
-    }) 
+      where: { id: userId },
+    });
 
     if (!currentUser || currentUser.tokenBalance <= 0) {
-    console.log('Token balance:', currentUser?.tokenBalance);
-    console.log('User:', currentUser);
-    throw new ForbiddenException('Token limit exceeded');
+      console.log('Token balance:', currentUser?.tokenBalance);
+      console.log('User:', currentUser);
+      throw new ForbiddenException('Token limit exceeded');
     }
 
     const age = currentUser.birthDate
-    ? this.calculateAge(currentUser.birthDate)
-    : 10;
+      ? this.calculateAge(currentUser.birthDate)
+      : 10;
 
     const firstName = currentUser.firstName;
 
@@ -101,20 +101,22 @@ export class AiController {
 
     const interests = currentUser.interests || [];
 
+    const gender = currentUser.gender || '';
+
     const blockedTopics = currentUser.blockedTopics || [];
 
     if (conversationId) {
-    const conversation = await prisma.conversation.findFirst({
-      where: {
-        id: Number(conversationId),
-        userId,
-      },
-    });
+      const conversation = await prisma.conversation.findFirst({
+        where: {
+          id: Number(conversationId),
+          userId,
+        },
+      });
 
-    if (!conversation) {
-      throw new ForbiddenException('Unauthorized conversation');
+      if (!conversation) {
+        throw new ForbiddenException('Unauthorized conversation');
+      }
     }
-  }
 
     // PROCESS FILES
     if (files && files.length > 0) {
@@ -153,20 +155,9 @@ export class AiController {
       convId = newConversation.data.id;
     }
 
-    console.log('CONV ID:', convId);
-    console.log('BODY:', body);
-    console.log('conversationId FROM BODY:', conversationId);
-    // const interests = Array.isArray(body.interests)
-    //   ? body.interests
-    //   : body.interests
-    //     ? [body.interests]
-    //     : [];
-    // const blockedTopics = Array.isArray(body.blockedTopics)
-    //   ? body.blockedTopics
-    //   : body.blockedTopics
-    //     ? [body.blockedTopics]
-    //     : [];
+    
     const stream = await this.aiService.streamAnswer(
+      userId,
       finalQuestion,
       Number(age),
       currentUser.firstName,
@@ -175,6 +166,7 @@ export class AiController {
       responseLength,
       learningStyle,
       interests,
+      gender,
       blockedTopics,
     );
 
@@ -187,22 +179,43 @@ export class AiController {
     let imageUrl = '';
     try {
       for await (const event of stream) {
+        console.log(event.type);
+        if(event.type === 'response.created') {
+          res.write(`event: progress\n`);
+          res.write(
+            `data: ${JSON.stringify({
+              step: "AI started writing the story..."
+            })}\n\n`,
+          );
+        }
+
+        if(event.type === 'response.in_progress') {
+          res.write(`event: progress\n`);
+          res.write(
+            `data: ${JSON.stringify({
+              step: "✍️ Writing story scenes..."
+            })}\n\n`,
+          );
+        }
+
         if (event.type === 'response.output_text.delta') {
           const chunk = event.delta;
 
           fullText += chunk;
-
           res.write(`event: text\n`);
 
           res.write(`data: ${JSON.stringify(chunk)}\n\n`);
         }
 
-        // if (event.type === 'response.completed') {
-        //   res.write(`data: [DONE]\n\n`);
-        // }
       }
 
       //audio
+      res.write(`event: progress\n`);
+      res.write(
+        `data: ${JSON.stringify({
+          step: "🎙️ Generating audio..."
+        })}\n\n`,
+      );
       const audioFile = await this.aiService.textToSpeech(fullText);
       audioUrl = `/uploads/${audioFile}`;
       console.log('FINAL AI RESPONSE:');
@@ -216,6 +229,12 @@ export class AiController {
 
       //image
       console.log('final question', finalQuestion);
+      res.write(`event: progress\n`);
+      res.write(
+        `data: ${JSON.stringify({
+          step: "🎨 Creating illustrations..."
+        })}\n\n`,
+      );
       const shouldGenerate =
         await this.aiService.shouldGenerateImage(finalQuestion);
       if (shouldGenerate) {
@@ -280,8 +299,18 @@ export class AiController {
     } catch (error) {
       console.error('Error saving conversation:', error);
     }
+    try {
+      if (currentUser.fcmToken) {
+        await this.firebaseService.sendNotification(
+          currentUser.fcmToken,
+          'AI Response Ready',
+          'Your Answer Is Ready',
+        );
+      }
+    } catch (err) {
+      console.error('FCM ERROR (ignored):', err);
+    }
     res.end();
-
   }
 
   @Get('me/tokens')
@@ -290,5 +319,29 @@ export class AiController {
     const userId = req.user.sub;
     console.log('REQ USER:', req.user);
     return this.aiService.getTokenStats(userId);
+  }
+
+  @Post('fcm-token')
+  @UseGuards(JwtAuthGuard)
+  async saveToken(@Req() req, @Body() body: { token: string }) {
+    console.log('FCM TOKEN RECEIVED:', body.token);
+    await prisma.user.update({
+      where: { id: req.user.sub },
+      data: { fcmToken: body.token },
+    });
+    console.log('FCM TOKEN RECEIVED:', body.token);
+    console.log('USER:', req.user.sub);
+    return {
+      success: true,
+    };
+  }
+
+  @Post('test-fcm')
+  async test(@Body() body: { token: string }) {
+    return this.firebaseService.sendNotification(
+      body.token,
+      'Test',
+      'Hello world',
+    );
   }
 }

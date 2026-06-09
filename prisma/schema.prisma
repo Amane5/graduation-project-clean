@@ -30,15 +30,19 @@ model User {
   fcmToken      String?
   conversations Conversation[]
 
-  readingLevel    String?
-  responseLength  String?
-  learningStyle   String?
-  interests       String[]
-  blockedTopics     String[]
-
-  tokenBalance    Int      @default(100000)
-  usedTokens      Int      @default(0)
-  stories Story[]
+  readingLevel   String?
+  responseLength String?
+  learningStyle  String?
+  interests      String[]
+  blockedTopics  String[]
+  gender         String?
+  tokenBalance   Int      @default(100000)
+  usedTokens     Int      @default(0)
+  stories        Story[]
+  uploadedDocuments Document[]
+  answers StoryAnswer[]
+  documents ChildDocument[]
+  vectorStoreId   String?
 }
 
 model Otp {
@@ -72,7 +76,7 @@ model Question {
 }
 
 model Conversation {
-  id           Int      @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
   userId Int
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -85,16 +89,16 @@ model Conversation {
 }
 
 model TokenUsage {
-  id             Int      @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-  parentId       Int
-  childId        Int
+  parentId Int
+  childId  Int
 
-  inputTokens    Int
-  outputTokens   Int
-  totalTokens    Int
+  inputTokens  Int
+  outputTokens Int
+  totalTokens  Int
 
-  createdAt     DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 enum StoryStatus {
@@ -103,43 +107,122 @@ enum StoryStatus {
 }
 
 model Story {
-  id                Int           @id @default(autoincrement())
-  title             String
-  content           String       
+  id      Int    @id @default(autoincrement())
+  title   String
+  content String
 
-  educationalGoal   String
-  storyType         String
-  storyLength       String
+  educationalGoal String
+  storyType       String
+  storyLength     String
 
-  hasImages         Boolean       @default(false)
-  hasAudio          Boolean       @default(false)
+  hasImages Boolean @default(false)
+  hasAudio  Boolean @default(false)
 
-  audioUrl          String?
+  audioUrl String?
 
-  status            StoryStatus   @default(DRAFT)
+  status StoryStatus @default(DRAFT)
 
-  childId           Int
-  child             User          @relation(fields: [childId], references: [id])
+  childId Int
+  child   User @relation(fields: [childId], references: [id])
 
-  scenes            StoryScene[]
+  scenes       StoryScene[]
+  editMessages StoryEditMessage[]
+  questions    StoryQuestion[]
+  answers      StoryAnswer[]
 
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  isApproved           Boolean @default(false)
+
+  questionsApproved    Boolean @default(false)
 }
 
 model StoryScene {
-  id          Int      @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-  storyId     Int
-  story       Story    @relation(fields: [storyId], references: [id])
+  storyId Int
+  story   Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
 
-  sceneOrder  Int
+  sceneOrder Int
 
-  title       String?
-  content     String   
+  title   String?
+  content String
 
   imagePrompt String?
   imageUrl    String?
 
+  createdAt DateTime @default(now())
+
+  startTime   Float?   
+  endTime     Float? 
+}
+
+model StoryEditMessage {
+  id Int @id @default(autoincrement())
+
+  storyId Int
+
+  role    String
+  content String
+
+  createdAt DateTime @default(now())
+
+  story Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+}
+
+model Document {
+  id Int @id @default(autoincrement())
+
+  title String
+  fileName String
+  fileUrl String
+
+  openaiFileId String
+
+  uploadedById Int
+  uploadedBy User @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  children ChildDocument[]
+}
+
+model ChildDocument {
+  childId Int
+  documentId Int
+
+  child User @relation(fields: [childId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@id([childId, documentId])
+}
+
+model StoryQuestion {
+  id          Int      @id @default(autoincrement())
+
+  storyId     Int
+  story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  question    String
+  answers StoryAnswer[]
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model StoryAnswer {
+  id Int @id @default(autoincrement())
+
+  storyId Int
+  story Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  questionId Int
+  question StoryQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  childId Int
+  child User @relation(fields: [childId], references: [id])
+
+  answer String
+
+  createdAt DateTime @default(now())
 }

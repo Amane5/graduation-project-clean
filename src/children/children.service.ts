@@ -7,9 +7,13 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { CreateChildDto } from './dto/create-child.dto';
+import OpenAI from 'openai';
 
 @Injectable()
 export class ChildrenService {
+  private openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
   async getChildren(parentId: number) {
     const children = await prisma.user.findMany({
       where: {
@@ -114,6 +118,11 @@ export class ChildrenService {
       });
     }
 
+    const vectorStore = await this.openai.vectorStores.create({
+      name:`${dto.firstName}-store`
+    })
+    console.log('VECTOR STORE:', vectorStore);
+    console.log('VECTOR STORE ID:', vectorStore.id);
     const hashedPassword = await bcrypt.hash(dto.password, 10);
     const child = await prisma.user.create({
       data: {
@@ -121,6 +130,7 @@ export class ChildrenService {
         firstName: dto.firstName,
         lastName: dto.lastName,
         birthDate: dto.birthDate ? new Date(dto.birthDate) : undefined,
+        vectorStoreId:vectorStore.id,
         password: hashedPassword,
         type: 'child',
         parentId: parentId,
@@ -128,6 +138,7 @@ export class ChildrenService {
         responseLength: dto.responseLength,
         learningStyle: dto.learningStyle,
         interests: dto.interests,
+        gender:dto.gender,
         blockedTopics: dto.blockedTopics || [],
       },
     });

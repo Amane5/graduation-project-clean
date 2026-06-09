@@ -16,3 +16,7 @@ export class UpdateStoryDto{
         content:string
     }[]
 }
+
+export class AiEditStoryDto {
+   editRequest:string
+}

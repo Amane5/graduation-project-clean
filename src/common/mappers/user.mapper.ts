@@ -12,6 +12,7 @@ export class UserMapper {
         responseLength: user.responseLength,
         learningStyle: user.learningStyle,
         interests: user.interests,
+        gender:user.gender,
         blockedTopics: user.blockedTopics,
       };
     }

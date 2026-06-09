@@ -13,8 +13,17 @@ export class AiService {
     });
   }
 
-  async generateAnswer(question: string, age: number): Promise<string> {
+  async generateAnswer(
+    childId: number,
+    question: string,
+    age: number,
+  ): Promise<string> {
     try {
+      const child = await prisma.user.findUnique({
+        where: {
+          id: childId,
+        },
+      });
       const response = await this.openai.responses.create({
         model: 'gpt-4.1-mini',
         input: [
@@ -40,7 +49,7 @@ export class AiService {
         tools: [
           {
             type: 'file_search',
-            vector_store_ids: [process.env.VECTOR_STORE_ID!],
+            vector_store_ids: [child?.vectorStoreId || ''],
           },
         ],
       });
@@ -52,23 +61,28 @@ export class AiService {
   }
 
   async streamAnswer(
+    childId: number,
     question: string,
     age: number,
     firstName: string,
     conversationId: number,
-    readingLevel:string,
-    responseLength:string,
-    learningStyle:string,
-    interests:string[],
-    blockedTopics:string[],
+    readingLevel: string,
+    responseLength: string,
+    learningStyle: string,
+    interests: string[],
+    gender: string,
+    blockedTopics: string[],
   ) {
-    
     console.log('STREAM ANSWER CALLED');
-    console.log("conversationId type", typeof conversationId);
-    console.log("conversationId value", conversationId);
+    console.log('conversationId type', typeof conversationId);
+    console.log('conversationId value', conversationId);
     console.log('PRISMA TEST START');
-    const history = await prisma.question.findMany(
-      {
+    const child = await prisma.user.findUnique({
+      where: {
+        id: childId,
+      },
+    });
+    const history = await prisma.question.findMany({
       where: {
         conversationId: Number(conversationId),
       },
@@ -76,20 +90,18 @@ export class AiService {
         createdAt: 'desc',
       },
       take: 30,
-    }
-  );
-  history.reverse();
+    });
+    history.reverse();
 
     console.log('HISTORY LENGTH:', history.length);
     console.log(JSON.stringify(history, null, 2));
     const conv = await prisma.question.findMany({
-      where:{conversationId: Number(conversationId)},
-    })
-    console.log('conv question ', conv)
+      where: { conversationId: Number(conversationId) },
+    });
+    console.log('conv question ', conv);
     const messages: any[] = [];
 
     for (const item of history) {
-
       messages.push({
         role: 'user',
         content: item.question,
@@ -108,19 +120,29 @@ export class AiService {
 
     console.log('MESSAGES:');
     console.log(JSON.stringify(messages, null, 2));
-
+    console.log('VECTOR STORE:', child?.vectorStoreId);
     const stream = await this.openai.responses.stream({
-      model: 'gpt-4.1-mini',
-
+      model: 'gpt-4.1',
+      ...(child?.vectorStoreId
+        ? {
+            tools: [
+              {
+                type: 'file_search',
+                vector_store_ids: [child?.vectorStoreId || ''],
+              },
+            ],
+          }
+        : {}),
       input: [
         {
           role: 'system',
-          content:`
+          content: `
             You are a friendly teacher for children.
 
             Rules:
             - Always answer according to the child's age: ${age}
             -Always answer according to the child's name:${firstName}
+            -Always answer according to the child's gender :${gender}
             - Reading level: ${readingLevel}
             - Response length: ${responseLength}
             - Learning style: ${learningStyle}
@@ -143,7 +165,9 @@ export class AiService {
             - Use conversation history for follow-up questions
             - Avoid unsafe, scary, violent, or inappropriate content
             - Never use difficult academic words without explanation
-
+            - IMPORTANT:
+              If the answer exists in the uploaded knowledge files,
+              you MUST use that information in your answer.
             Age behavior:
             - If age is 3-5:
               * Use extremely simple words
@@ -369,16 +393,115 @@ export class AiService {
     };
   }
 
-  async generateStory(prompt: string){
+  async generateStory(prompt: string) {
     const response = await this.openai.responses.create({
       model: 'gpt-4.1-mini',
       input: [
         {
           role: 'system',
-          content: prompt
-        }
-      ]
-    })
-    return response.output_text
+          content: prompt,
+        },
+      ],
+    });
+    return response.output_text;
   }
+
+  async editStory(prompt: string) {
+    const response = await this.openai.chat.completions.create({
+      model: 'gpt-4.1-mini',
+
+      messages: [
+        {
+          role: 'system',
+          content: 'You are an AI editor for children educational stories.',
+        },
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+
+      temperature: 0.7,
+    });
+
+    return response.choices[0].message.content || '';
+  }
+
+  async generateSceneTimeline(
+  scenes: { sceneOrder: number; title: string; content: string }[],
+  transcript: string,
+) {
+  const response = await this.openai.chat.completions.create({
+    model: "gpt-4.1-mini",
+    messages: [
+      {
+        role: "system",
+        content: `
+You are a timing alignment engine.
+
+You will receive:
+1. A list of story scenes
+2. A full narration transcript of an audio file
+
+Your task:
+- Split the transcript into sections matching each scene
+- Estimate startTime and endTime in seconds
+- Ensure order is preserved
+- Total time must be realistic
+
+Return ONLY valid JSON:
+
+{
+  "timeline": [
+    { "sceneOrder": 1, "start": 0, "end": 5 },
+    { "sceneOrder": 2, "start": 5, "end": 12 }
+  ]
+}
+        `,
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          scenes,
+          transcript,
+        }),
+      },
+    ],
+  });
+
+  const content = response.choices[0].message.content || "{}";
+
+const cleaned = content
+  .replace(/```json/g, "")
+  .replace(/```/g, "")
+  .trim();
+
+return JSON.parse(cleaned);
+  }
+
+  async generateQuestions(prompt: string) {
+  const response =
+    await this.openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+
+      messages: [
+      {
+        role: 'system',
+        content: `
+        You generate educational questions for children.
+        Always return valid JSON.
+        Never return explanations.
+        `,
+      },
+      {
+        role: 'user',
+        content: prompt,
+      },
+    ],
+
+      temperature: 0.7,
+    });
+
+  return response.choices[0].message.content;
+}
 }

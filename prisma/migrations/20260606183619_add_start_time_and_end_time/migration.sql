@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "StoryScene" ADD COLUMN     "endTime" DOUBLE PRECISION,
+ADD COLUMN     "startTime" DOUBLE PRECISION;

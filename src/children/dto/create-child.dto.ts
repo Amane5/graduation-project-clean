@@ -32,6 +32,9 @@ export class CreateChildDto {
   @IsIn(['story', 'logical' , 'playful' , 'visual'])
   learningStyle: string
 
+  @IsIn(['male', 'female' ])
+  gender: string
+
   @IsArray()
   interests: string[]
 
