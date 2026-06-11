@@ -69,7 +69,7 @@ export class AiController {
     @Res() res: Response,
     @Req() req,
   ) {
-    const { question, conversationId } = body;
+    const { question, conversationId, mode = 'normal', } = body;
 
     let finalQuestion = question || '';
     let imageDescription = '';
@@ -168,16 +168,25 @@ export class AiController {
       interests,
       gender,
       blockedTopics,
+      mode,
     );
 
+    
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-
+res.write(`event: mode\n`);
+    res.write(
+      `data: ${JSON.stringify({
+        mode,
+      })}\n\n`,
+    );
     let fullText = '';
     let audioUrl = '';
     let imageUrl = '';
     try {
+      let parserBuffer = '';
+        let currentSection = '';
       for await (const event of stream) {
         console.log(event.type);
         if(event.type === 'response.created') {
@@ -198,13 +207,68 @@ export class AiController {
           );
         }
 
+        // if (event.type === 'response.output_text.delta') {
+        //   const chunk = event.delta;
+
+        //   fullText += chunk;
+        //   res.write(`event: text\n`);
+
+        //   res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+        // }
+        
         if (event.type === 'response.output_text.delta') {
           const chunk = event.delta;
 
           fullText += chunk;
-          res.write(`event: text\n`);
 
-          res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+          if (mode === 'normal') {
+            res.write(`event: text\n`);
+            res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+          }
+
+          if (mode === 'journey') {
+            parserBuffer += chunk;
+
+            const sections = [
+              'TITLE',
+              'INTRODUCTION',
+              'STORY',
+              'EXPLANATION',
+              'FACTS',
+              'CHALLENGE',
+              'QUESTIONS',
+              'IMAGE_PROMPT',
+            ];
+
+            for (const section of sections) {
+              const marker = `[[${section}]]`;
+
+              if (parserBuffer.includes(marker)) {
+                currentSection = section;
+
+                parserBuffer = parserBuffer.replace(marker, '');
+
+                res.write(`event: journey_section\n`);
+                console.log('SECTION FOUND', section);
+                res.write(
+                  `data: ${JSON.stringify({
+                    section: section.toLowerCase(),
+                  })}\n\n`,
+                );
+              }
+            }
+
+            if (currentSection) {
+              res.write(`event: journey_delta\n`);
+
+              res.write(
+                `data: ${JSON.stringify({
+                  section: currentSection.toLowerCase(),
+                  chunk,
+                })}\n\n`,
+              );
+            }
+          }
         }
 
       }
@@ -295,6 +359,8 @@ export class AiController {
         conversationId: Number(convId),
         audioUrl,
         imageUrl,
+        responseMode: mode,
+        journeyData: mode === 'journey' ? fullText : null,
       });
     } catch (error) {
       console.error('Error saving conversation:', error);

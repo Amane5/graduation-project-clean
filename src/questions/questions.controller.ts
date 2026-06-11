@@ -3,6 +3,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Req, UseGuards 
 import { QuestionsService } from './questions.service';
 import { CreateQuestionDto } from './dto/create-questions.dto';
 import { UpdateQuestionDto } from './dto/update-questions.dto';
+import { SubmitAnswersDto } from './dto/submit-answer.dto';
 
 @Controller('questions')
 export class QuestionsController {
@@ -55,5 +56,15 @@ export class QuestionsController {
     @UseGuards(JwtAuthGuard)
     async regenerateQuestions(@Req() req,@Param('storyId') storyId:string){
         return this.questionsService.regenerateQuestions(req.user.sub, Number(storyId))
+    }
+
+    @Post(':storyId/answers')
+    @UseGuards(JwtAuthGuard)
+    async submitAnswers(@Req() req,@Param('storyId')storyId: number,@Body()dto: SubmitAnswersDto,) {
+    return this.questionsService.submitAnswers(
+        req.user.sub,
+        storyId,
+        dto,
+    );
     }
 }

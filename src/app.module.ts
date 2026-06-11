@@ -10,9 +10,10 @@ import { HistoryModule } from './history/history.module';
 import { StoryModule } from './story/story.module';
 import { DocumentsModule } from './documents/documents.module';
 import { QuestionsModule } from './questions/questions.module';
+import { ReportsModule } from './reports/reports.module';
 
 
 @Module({
-  imports: [QuestionModule, AiModule, AuthModule, ChildrenModule, ConversationModule, HistoryModule, StoryModule, DocumentsModule, QuestionsModule],
+  imports: [QuestionModule, AiModule, AuthModule, ChildrenModule, ConversationModule, HistoryModule, StoryModule, DocumentsModule, QuestionsModule, ReportsModule],
 })
 export class AppModule {}

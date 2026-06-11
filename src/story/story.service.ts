@@ -303,7 +303,9 @@ const transcript =
             orderBy:{
                 sceneOrder: 'asc'
             }
-        }}
+        },
+        questions:true
+    }
     }) 
 
     return stories.map((story) => ({
@@ -315,6 +317,10 @@ const transcript =
 
     audioUrl: story.audioUrl,
     status:story.status,
+     questions: story.questions.map((q) => ({
+        id: q.id,
+        question: q.question,
+    })),
     scenes: story.scenes.map((scene) => ({
       id: scene.id,
 
@@ -327,7 +333,7 @@ const transcript =
       imageUrl: scene.imageUrl,
 
       startTime: scene.startTime,
-  endTime: scene.endTime,
+        endTime: scene.endTime,
     })),
   }));
   }
@@ -355,7 +361,9 @@ const transcript =
             orderBy:{
                 sceneOrder: 'asc'
             }
-        }}
+        },
+        questions:true
+    }
     })
 
     return stories.map((story) => ({
@@ -370,6 +378,10 @@ const transcript =
     audioUrl: story.audioUrl,
 
     status:story.status,
+    questions: story.questions.map((q) => ({
+    id: q.id,
+    question: q.question,
+  })),
     scenes: story.scenes.map((scene) => ({
       id: scene.id,
 

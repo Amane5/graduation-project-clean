@@ -42,6 +42,7 @@ model User {
   uploadedDocuments Document[]
   answers StoryAnswer[]
   documents ChildDocument[]
+  reports StoryReport[]
   vectorStoreId   String?
 }
 
@@ -73,6 +74,10 @@ model Question {
   createdAt        DateTime @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  responseMode     String @default("normal")
+
+  journeyData      Json?
 }
 
 model Conversation {
@@ -129,7 +134,7 @@ model Story {
   editMessages StoryEditMessage[]
   questions    StoryQuestion[]
   answers      StoryAnswer[]
-
+  reports      StoryReport[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -205,7 +210,8 @@ model StoryQuestion {
   story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
 
   question    String
-  answers StoryAnswer[]
+  answers     StoryAnswer[]
+  expectedAnswer String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -223,6 +229,44 @@ model StoryAnswer {
   child User @relation(fields: [childId], references: [id])
 
   answer String
+
+  createdAt DateTime @default(now())
+  evaluation StoryAnswerEvaluation?
+
+}
+
+model StoryAnswerEvaluation {
+  id Int @id @default(autoincrement())
+
+  answerId Int @unique
+
+  answer StoryAnswer @relation(fields: [answerId], references: [id], onDelete: Cascade)
+
+  score Int
+
+  feedback String
+
+  createdAt DateTime @default(now())
+}
+
+model StoryReport {
+  id Int @id @default(autoincrement())
+
+  storyId Int
+  story Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  childId Int
+  child User @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  overallScore Int
+
+  summary String
+
+  goalAchievement Int
+
+  strengths String[]
+
+  improvements String[]
 
   createdAt DateTime @default(now())
 }

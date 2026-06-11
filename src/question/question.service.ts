@@ -217,6 +217,9 @@ async getConversationMessages(
       createdAt: true,
       audioUrl: true,
       imageUrl: true,
+
+      responseMode: true,
+      journeyData: true,
     },
   });
 
@@ -232,8 +235,10 @@ async getConversationMessages(
     conversationId: number;
     audioUrl?: string;
     imageUrl?: string;
+    responseMode?: string;
+    journeyData?: any;
   }) {
-    const { question, answer, conversationId, audioUrl, imageUrl } = data;
+    const { question, answer, conversationId, audioUrl, imageUrl, responseMode, journeyData } = data;
     const savedQuestion = await prisma.question.create({
       data:{
         question,
@@ -241,6 +246,8 @@ async getConversationMessages(
         conversationId,
         audioUrl,
         imageUrl,
+        responseMode,
+        journeyData
       }
     })
 

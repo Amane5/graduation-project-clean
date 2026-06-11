@@ -72,6 +72,7 @@ export class AiService {
     interests: string[],
     gender: string,
     blockedTopics: string[],
+    mode: string,
   ) {
     console.log('STREAM ANSWER CALLED');
     console.log('conversationId type', typeof conversationId);
@@ -121,6 +122,31 @@ export class AiService {
     console.log('MESSAGES:');
     console.log(JSON.stringify(messages, null, 2));
     console.log('VECTOR STORE:', child?.vectorStoreId);
+    const systemPrompt = mode === 'journey'
+    ? this.buildJourneyPrompt(
+        age,
+        firstName,
+        gender,
+        readingLevel,
+        responseLength,
+        learningStyle,
+        interests,
+        blockedTopics,
+      )
+    : this.buildNormalPrompt(
+        age,
+        firstName,
+        gender,
+        readingLevel,
+        responseLength,
+        learningStyle,
+        interests,
+        blockedTopics,
+      );
+
+console.log('MODE:', mode);
+console.log('SYSTEM PROMPT:');
+console.log(systemPrompt);
     const stream = await this.openai.responses.stream({
       model: 'gpt-4.1',
       ...(child?.vectorStoreId
@@ -136,61 +162,63 @@ export class AiService {
       input: [
         {
           role: 'system',
-          content: `
-            You are a friendly teacher for children.
+          content: 
+          systemPrompt
+          // `
+          //   You are a friendly teacher for children.
 
-            Rules:
-            - Always answer according to the child's age: ${age}
-            -Always answer according to the child's name:${firstName}
-            -Always answer according to the child's gender :${gender}
-            - Reading level: ${readingLevel}
-            - Response length: ${responseLength}
-            - Learning style: ${learningStyle}
-            - Interests: ${interests.join(', ')}
-            - Blocked topics: ${blockedTopics.join(', ')}
-            - Use very simple words for younger children
-            - Use short sentences for very young children
-            - Use fun examples children can understand
-            - Be warm, kind, and encouraging
-            - Remember information from previous messages
-            - Use conversation history to answer follow-up questions
-            - Never use difficult academic words without explanation
-            - Adapt vocabulary to the child's level
-            - Keep answers age appropriate
-            - Use the preferred learning style
-            - Include interests in examples when relevant
-            -avoid blocked topics and steer conversation away from them
-            - Keep explanations fun and engaging
-            - Be warm, kind, and encouraging
-            - Use conversation history for follow-up questions
-            - Avoid unsafe, scary, violent, or inappropriate content
-            - Never use difficult academic words without explanation
-            - IMPORTANT:
-              If the answer exists in the uploaded knowledge files,
-              you MUST use that information in your answer.
-            Age behavior:
-            - If age is 3-5:
-              * Use extremely simple words
-              * Keep answers very short
-              * Use playful explanations
-              * Avoid complicated details
+          //   Rules:
+          //   - Always answer according to the child's age: ${age}
+          //   -Always answer according to the child's name:${firstName}
+          //   -Always answer according to the child's gender :${gender}
+          //   - Reading level: ${readingLevel}
+          //   - Response length: ${responseLength}
+          //   - Learning style: ${learningStyle}
+          //   - Interests: ${interests.join(', ')}
+          //   - Blocked topics: ${blockedTopics.join(', ')}
+          //   - Use very simple words for younger children
+          //   - Use short sentences for very young children
+          //   - Use fun examples children can understand
+          //   - Be warm, kind, and encouraging
+          //   - Remember information from previous messages
+          //   - Use conversation history to answer follow-up questions
+          //   - Never use difficult academic words without explanation
+          //   - Adapt vocabulary to the child's level
+          //   - Keep answers age appropriate
+          //   - Use the preferred learning style
+          //   - Include interests in examples when relevant
+          //   -avoid blocked topics and steer conversation away from them
+          //   - Keep explanations fun and engaging
+          //   - Be warm, kind, and encouraging
+          //   - Use conversation history for follow-up questions
+          //   - Avoid unsafe, scary, violent, or inappropriate content
+          //   - Never use difficult academic words without explanation
+          //   - IMPORTANT:
+          //     If the answer exists in the uploaded knowledge files,
+          //     you MUST use that information in your answer.
+          //   Age behavior:
+          //   - If age is 3-5:
+          //     * Use extremely simple words
+          //     * Keep answers very short
+          //     * Use playful explanations
+          //     * Avoid complicated details
 
-            - If age is 6-8:
-              * Use simple explanations
-              * Give small examples
-              * Keep answers easy and fun
+          //   - If age is 6-8:
+          //     * Use simple explanations
+          //     * Give small examples
+          //     * Keep answers easy and fun
 
-            - If age is 9-12:
-              * Give more detailed explanations
-              * Teach simple concepts clearly
-              * Encourage curiosity and learning
+          //   - If age is 9-12:
+          //     * Give more detailed explanations
+          //     * Teach simple concepts clearly
+          //     * Encourage curiosity and learning
 
-            - If age is 13+:
-              * Give more complete and educational answers
-              * Explain concepts more deeply while staying clear
+          //   - If age is 13+:
+          //     * Give more complete and educational answers
+          //     * Explain concepts more deeply while staying clear
 
-            Answer naturally like a teacher talking to a child.
-            `,
+          //   Answer naturally like a teacher talking to a child.
+          //   `,
         },
 
         ...messages,
@@ -479,29 +507,198 @@ const cleaned = content
 return JSON.parse(cleaned);
   }
 
-  async generateQuestions(prompt: string) {
-  const response =
-    await this.openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+    async generateQuestions(prompt: string) {
+    const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
 
-      messages: [
-      {
-        role: 'system',
-        content: `
-        You generate educational questions for children.
-        Always return valid JSON.
-        Never return explanations.
-        `,
-      },
-      {
-        role: 'user',
-        content: prompt,
-      },
-    ],
+        messages: [
+        {
+          role: 'system',
+          content: `
+          You generate educational questions for children.
+          Always return valid JSON.
+          Never return explanations.
+          `,
+        },
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
 
-      temperature: 0.7,
-    });
+        temperature: 0.7,
+      });
 
-  return response.choices[0].message.content;
+    return response.choices[0].message.content;
+  }
+
+  async evaluateAnswers(prompt: string) {
+    const response =
+      await this.openai.chat.completions.create({
+        model: "gpt-4o-mini",
+
+        messages: [
+          {
+            role: "system",
+            content: `
+            You evaluate children's answers.
+
+            Always return valid JSON.
+            Never return explanations outside JSON.
+            `,
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+
+        temperature: 0.3,
+      });
+
+    return response.choices[0].message.content;
+  }
+
+  private buildJourneyPrompt(
+  age: number,
+  firstName: string,
+  gender: string,
+  readingLevel: string,
+  responseLength: string,
+  learningStyle: string,
+  interests: string[],
+  blockedTopics: string[],
+) {
+  return `
+You are creating an educational exploration journey for children.
+
+Child profile:
+
+Age: ${age}
+Name: ${firstName}
+Gender: ${gender}
+Reading Level: ${readingLevel}
+Response Length: ${responseLength}
+Learning Style: ${learningStyle}
+Interests: ${interests.join(', ')}
+Blocked Topics: ${blockedTopics.join(', ')}
+
+IMPORTANT OUTPUT FORMAT
+
+You MUST answer using EXACTLY this structure:
+
+[[TITLE]]
+actual title
+
+[[INTRODUCTION]]
+actual introduction
+
+[[STORY]]
+actual story
+
+[[EXPLANATION]]
+actual explanation
+
+[[FACTS]]
+- fact 1
+- fact 2
+- fact 3
+
+[[CHALLENGE]]
+actual challenge
+
+[[QUESTIONS]]
+- question 1
+- question 2
+- question 3
+
+[[IMAGE_PROMPT]]
+actual image prompt
+
+Do not add any text before [[TITLE]]
+Do not add any text after [[IMAGE_PROMPT]]
+
+[[IMAGE_PROMPT]]
+
+A detailed educational illustration prompt.
+
+Rules:
+
+- Adapt every section to age ${age}
+- Use simple language for younger children
+- Use richer explanations for older children
+- Keep all sections present
+- Never skip any section
+- Use interests when relevant
+- Avoid blocked topics
+- Keep the tone warm and exciting
+`;
+}
+  
+  private buildNormalPrompt(
+  age: number,
+  firstName: string,
+  gender: string,
+  readingLevel: string,
+  responseLength: string,
+  learningStyle: string,
+  interests: string[],
+  blockedTopics: string[],
+) {
+  return `
+  You are a friendly teacher for children.
+
+  Rules:
+  - Always answer according to the child's age: ${age}
+  -Always answer according to the child's name:${firstName}
+  -Always answer according to the child's gender :${gender}
+  - Reading level: ${readingLevel}
+  - Response length: ${responseLength}
+  - Learning style: ${learningStyle}
+  - Interests: ${interests.join(', ')}
+  - Blocked topics: ${blockedTopics.join(', ')}
+  - Use very simple words for younger children
+  - Use short sentences for very young children
+  - Use fun examples children can understand
+  - Be warm, kind, and encouraging
+  - Remember information from previous messages
+  - Use conversation history to answer follow-up questions
+  - Never use difficult academic words without explanation
+  - Adapt vocabulary to the child's level
+  - Keep answers age appropriate
+  - Use the preferred learning style
+  - Include interests in examples when relevant
+  -avoid blocked topics and steer conversation away from them
+  - Keep explanations fun and engaging
+  - Be warm, kind, and encouraging
+  - Use conversation history for follow-up questions
+  - Avoid unsafe, scary, violent, or inappropriate content
+  - Never use difficult academic words without explanation
+  - IMPORTANT:
+    If the answer exists in the uploaded knowledge files,
+    you MUST use that information in your answer.
+  Age behavior:
+  - If age is 3-5:
+    * Use extremely simple words
+    * Keep answers very short
+    * Use playful explanations
+    * Avoid complicated details
+
+  - If age is 6-8:
+    * Use simple explanations
+    * Give small examples
+    * Keep answers easy and fun
+
+  - If age is 9-12:
+    * Give more detailed explanations
+    * Teach simple concepts clearly
+    * Encourage curiosity and learning
+
+  - If age is 13+:
+    * Give more complete and educational answers
+    * Explain concepts more deeply while staying clear
+
+  Answer naturally like a teacher talking to a child.
+`
 }
 }

@@ -5,6 +5,8 @@ import { CreateQuestionDto } from './dto/create-questions.dto';
 import { UpdateQuestionDto } from './dto/update-questions.dto';
 import { buildQuestionsPrompt } from './prompt/question.prompt';
 import { buildRegenerateQuestionsPrompt } from './prompt/regenerateQuestion.prompt';
+import { SubmitAnswersDto } from './dto/submit-answer.dto';
+import { buildEvaluationPrompt } from './prompt/question-evaluation.prompt';
 
 @Injectable()
 export class QuestionsService {
@@ -138,6 +140,7 @@ console.log('QUESTION:', dto.question);
             data: {
             storyId,
             question: dto.question,
+            expectedAnswer: dto.expectedAnswer,
             },
         });
     }
@@ -178,6 +181,7 @@ console.log('QUESTION:', dto.question);
         },
         data: {
         question: dto.question,
+        expectedAnswer:dto.expectedAnswer,
         },
     });
     }
@@ -235,7 +239,8 @@ console.log('QUESTION:', dto.question);
             const question = await prisma.storyQuestion.create({
                 data:{
                     storyId,
-                    question:q.question
+                    question:q.question,
+                    expectedAnswer: q.expectedAnswer,
                 }
             })
             savedQuestions.push(question)
@@ -281,5 +286,145 @@ console.log('QUESTION:', dto.question);
             parentId,
             storyId,
         );
+    }
+
+    async submitAnswers(childId: number,storyId: number,dto: SubmitAnswersDto) {
+        const story = await prisma.story.findUnique({
+        where: {
+            id: storyId,
+        },
+        include: {
+            questions: true,
+        },
+        });
+
+        if (!story) {
+        throw new NotFoundException(
+            'Story not found',
+        );
+        }
+
+        if (story.childId !== childId) {
+        throw new ForbiddenException(
+            'Unauthorized',
+        );
+        }
+
+        await prisma.storyAnswer.deleteMany({
+        where: {
+            storyId,
+            childId,
+        },
+        });
+
+        await prisma.storyAnswer.createMany({
+        data: dto.answers.map((a) => ({
+            storyId,
+            questionId: a.questionId,
+            childId,
+            answer: a.answer,
+        })),
+        });
+
+        const savedAnswers = await prisma.storyAnswer.findMany({
+            where: {
+                storyId,
+                childId,
+            },
+        });
+
+        const answersPayload = story.questions.map(question => {
+            const childAnswer = dto.answers.find(
+                a => a.questionId === question.id
+            );
+
+            return {
+                questionId: question.id,
+                question: question.question,
+                expectedAnswer: question.expectedAnswer,
+                childAnswer: childAnswer?.answer ?? "",
+            };
+        });
+        
+        
+
+        const evaluationPrompt = buildEvaluationPrompt(story, answersPayload)
+
+        const evaluateAnswers = await this.aiService.evaluateAnswers(evaluationPrompt)
+        if(evaluateAnswers === null){
+            throw new BadRequestException(
+                'AI failed to evaluate answers'
+            )
+        }
+        const cleanedEvaluation = evaluateAnswers
+            .replace(/```json/g, "")
+            .replace(/```/g, "")
+            .trim();
+
+        let parsed;
+
+        try {
+            parsed = JSON.parse(
+                cleanedEvaluation,
+            );
+                    console.log("AI EVALUATION:");
+
+        } catch {
+            throw new BadRequestException(
+                "Invalid evaluation response",
+            );
+        }
+      
+        if (!parsed.evaluations) {
+            throw new BadRequestException(
+                "Invalid evaluation structure",
+            );
+        }
+
+        for (const evaluation of parsed.evaluations) {
+            const answer = savedAnswers.find(
+                a => a.questionId === evaluation.questionId,
+            );
+
+            if (!answer) {
+            throw new BadRequestException(
+                `Answer not found for question ${evaluation.questionId}`
+            );
+            }
+
+            await prisma.storyAnswerEvaluation.create({
+                data: {
+                answerId: answer.id,
+                score: evaluation.score,
+                feedback: evaluation.feedback,
+                },
+            });
+        }
+
+        await prisma.storyReport.create({
+        data: {
+            storyId,
+            childId,
+
+            overallScore:
+            parsed.overallScore,
+
+            goalAchievement:
+            parsed.goalAchievement,
+
+            summary:
+            parsed.summary,
+
+            strengths:
+            parsed.strengths,
+
+            improvements:
+            parsed.improvements,
+        },
+        });
+        return {
+            success: true,
+            answers: savedAnswers
+        };
     }
 }
