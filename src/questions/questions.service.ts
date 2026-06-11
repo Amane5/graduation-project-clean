@@ -7,6 +7,7 @@ import { buildQuestionsPrompt } from './prompt/question.prompt';
 import { buildRegenerateQuestionsPrompt } from './prompt/regenerateQuestion.prompt';
 import { SubmitAnswersDto } from './dto/submit-answer.dto';
 import { buildEvaluationPrompt } from './prompt/question-evaluation.prompt';
+import { buildExpectedAnswerPrompt } from './prompt/ExpectedAnswer.Prompt';
 
 @Injectable()
 export class QuestionsService {
@@ -117,7 +118,8 @@ export class QuestionsService {
         const story = await prisma.story.findFirst({
             where:{id:storyId},
             include:{
-                child:true
+                child:true,
+                scenes:true
             }
         })
 
@@ -134,20 +136,42 @@ export class QuestionsService {
             'Unauthorized',
             );
         }
-console.log('DTO:', dto);
-console.log('QUESTION:', dto.question);
+        console.log('DTO:', dto);
+        console.log('QUESTION:', dto.question);
+
+        const storyText = story.scenes
+        .map((s) => s.content)
+        .join('\n');
+
+        const prompt = buildExpectedAnswerPrompt(storyText, dto.question)
+
+        const aiResponse = await this.aiService.generateExpectedAnswer(prompt);
+
+        const cleaned = aiResponse
+        ?.replace(/```json/g, '')
+        .replace(/```/g, '')
+        .trim();
+        let parsed;
+
+        try {
+        parsed = JSON.parse(cleaned || '{}');
+        } catch {
+        throw new BadRequestException(
+            'Invalid AI response',
+        );
+        }
+
         return prisma.storyQuestion.create({
             data: {
             storyId,
             question: dto.question,
-            expectedAnswer: dto.expectedAnswer,
+            expectedAnswer: parsed.expectedAnswer
             },
         });
     }
 
     async updateQuestion(parentId: number,questionId: number,dto: UpdateQuestionDto) {
-    const question =
-        await prisma.storyQuestion.findUnique({
+    const question = await prisma.storyQuestion.findUnique({
         where: {
             id: questionId,
         },
@@ -155,6 +179,7 @@ console.log('QUESTION:', dto.question);
             story: {
             include: {
                 child: true,
+                scenes:true
             },
             },
         },
@@ -175,13 +200,31 @@ console.log('QUESTION:', dto.question);
         );
     }
 
+    const storyText = question.story.scenes
+        .map((s) => s.content)
+        .join('\n');
+    const prompt = buildExpectedAnswerPrompt(storyText, dto.question)
+    const aiResponse = await this.aiService.generateExpectedAnswer(prompt)
+    const cleaned = aiResponse
+        ?.replace(/```json/g, '')
+        .replace(/```/g, '')
+        .trim();
+        let parsed;
+
+        try {
+        parsed = JSON.parse(cleaned || '{}');
+        } catch {
+        throw new BadRequestException(
+            'Invalid AI response',
+        );
+        }
     return prisma.storyQuestion.update({
         where: {
         id: questionId,
         },
         data: {
         question: dto.question,
-        expectedAnswer:dto.expectedAnswer,
+        expectedAnswer:parsed.expectedAnswer,
         },
     });
     }

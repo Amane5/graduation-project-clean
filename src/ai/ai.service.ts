@@ -532,6 +532,37 @@ return JSON.parse(cleaned);
     return response.choices[0].message.content;
   }
 
+  async generateExpectedAnswer(prompt: string) {
+  const response = await this.openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+
+    messages: [
+      {
+        role: 'system',
+        content: `
+You generate expected answers for children's story questions.
+
+Always return valid JSON.
+
+Return format:
+
+{
+  "expectedAnswer": "..."
+}
+        `,
+      },
+      {
+        role: 'user',
+        content: prompt,
+      },
+    ],
+
+    temperature: 0.3,
+  });
+
+  return response.choices[0].message.content;
+  }
+
   async evaluateAnswers(prompt: string) {
     const response =
       await this.openai.chat.completions.create({
