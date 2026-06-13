@@ -159,8 +159,12 @@ model StoryScene {
 
   createdAt DateTime @default(now())
 
-  startTime   Float?   
-  endTime     Float? 
+  audioUrl String?
+
+  duration Float?
+
+  startTime Float?
+  endTime Float?
 }
 
 model StoryEditMessage {

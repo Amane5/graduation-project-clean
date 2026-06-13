@@ -175,7 +175,7 @@ export class AiController {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-res.write(`event: mode\n`);
+    res.write(`event: mode\n`);
     res.write(
       `data: ${JSON.stringify({
         mode,
@@ -274,12 +274,13 @@ res.write(`event: mode\n`);
       }
 
       //audio
-      res.write(`event: progress\n`);
-      res.write(
-        `data: ${JSON.stringify({
-          step: "🎙️ Generating audio..."
-        })}\n\n`,
+      if(currentUser.fcmToken){
+        await this.firebaseService.sendProgressNotification(
+        currentUser.fcmToken,
+        '🎙️ Generating audio...',
       );
+      }
+
       const audioFile = await this.aiService.textToSpeech(fullText);
       audioUrl = `/uploads/${audioFile}`;
       console.log('FINAL AI RESPONSE:');
@@ -292,16 +293,17 @@ res.write(`event: mode\n`);
       );
 
       //image
-      console.log('final question', finalQuestion);
-      res.write(`event: progress\n`);
-      res.write(
-        `data: ${JSON.stringify({
-          step: "🎨 Creating illustrations..."
-        })}\n\n`,
-      );
+
       const shouldGenerate =
         await this.aiService.shouldGenerateImage(finalQuestion);
       if (shouldGenerate) {
+        if(currentUser.fcmToken){
+          await this.firebaseService.sendProgressNotification(
+          currentUser.fcmToken,
+          '🎨 Creating illustrations...',
+        );
+        }
+        
         imageUrl = await this.aiService.generateImage(finalQuestion);
         res.write(`event: image\n`);
         res.write(
@@ -402,12 +404,5 @@ res.write(`event: mode\n`);
     };
   }
 
-  @Post('test-fcm')
-  async test(@Body() body: { token: string }) {
-    return this.firebaseService.sendNotification(
-      body.token,
-      'Test',
-      'Hello world',
-    );
-  }
+
 }

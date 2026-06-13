@@ -29,4 +29,17 @@ export class FirebaseService {
       },
     });
   }
+
+  async sendProgressNotification(
+  token: string,
+  step: string,
+) {
+  return admin.messaging().send({
+    token,
+    data: {
+      type: 'AI_PROGRESS',
+      step,
+    },
+  });
+}
 }

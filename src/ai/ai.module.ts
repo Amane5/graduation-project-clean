@@ -9,7 +9,7 @@ import { FirebaseService } from './firebase.service';
   imports: [forwardRef(() => QuestionModule), ConversationModule],
   providers: [AiService, FirebaseService],
   controllers: [AiController],
-  exports: [AiService],
+  exports: [AiService, FirebaseService],
 })
 
 export class AiModule {}

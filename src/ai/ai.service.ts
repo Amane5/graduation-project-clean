@@ -2,10 +2,27 @@ import { Injectable } from '@nestjs/common';
 import OpenAI from 'openai';
 import * as fs from 'fs';
 import { prisma } from '@/lib/prisma';
+// import ffmpeg from "fluent-ffmpeg";
+// import ffmpegPath from "ffmpeg-static";
+import { parseFile } from "music-metadata";
+import ffmpeg from "fluent-ffmpeg";
+
+// import ffprobe from "ffprobe-static";
+
+// ffmpeg.setFfmpegPath(ffmpegPath as string);
+// ffmpeg.setFfprobePath(ffprobe.path);
+ffmpeg.setFfmpegPath(
+  "D:\\ffmpeg\\ffmpeg-8.1.1-essentials_build\\bin\\ffmpeg.exe"
+);
+
+ffmpeg.setFfprobePath(
+  "D:\\ffmpeg\\ffmpeg-8.1.1-essentials_build\\bin\\ffprobe.exe"
+);
 
 @Injectable()
 export class AiService {
   private openai: OpenAI;
+
   constructor() {
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
@@ -310,20 +327,76 @@ console.log(systemPrompt);
     return response.text;
   }
 
-  async textToSpeech(text: string): Promise<string> {
-    const response = await this.openai.audio.speech.create({
-      model: 'gpt-4o-mini-tts',
-      voice: 'alloy',
-      input: text,
-    });
+  // async textToSpeech(text: string): Promise<string> {
+  //   const response = await this.openai.audio.speech.create({
+  //     model: 'gpt-4o-mini-tts',
+  //     voice: 'alloy',
+  //     input: text,
+  //   });
+
+  //   const fileName = `audio-${Date.now()}.mp3`;
+  //   const filePath = `uploads/${fileName}`;
+
+  //   const buffer = Buffer.from(await response.arrayBuffer());
+  //   fs.writeFileSync(filePath, buffer);
+
+  //   return fileName;
+  // }
+
+  async textToSpeech(text: string) {
+    const response =
+      await this.openai.audio.speech.create({
+        model: "gpt-4o-mini-tts",
+        voice: "alloy",
+        input: text,
+      });
 
     const fileName = `audio-${Date.now()}.mp3`;
+
     const filePath = `uploads/${fileName}`;
 
     const buffer = Buffer.from(await response.arrayBuffer());
+
     fs.writeFileSync(filePath, buffer);
 
-    return fileName;
+    const metadata = await parseFile(filePath);
+
+    return {
+      fileName,
+      filePath,
+      duration: metadata.format.duration || 0,
+    };
+  }
+
+  async mergeAudioFiles(files: string[]): Promise<string> {
+console.log("MERGING FILES");
+console.log(files);
+
+console.log("FFMPEG PATH");
+console.log("D:\\ffmpeg\\ffmpeg-8.1.1-essentials_build\\bin\\ffmpeg.exe");
+
+console.log("FFPROBE PATH");
+console.log("D:\\ffmpeg\\ffmpeg-8.1.1-essentials_build\\bin\\ffprobe.exe");
+  return new Promise((resolve, reject) => {
+
+    const outputFile = `story-${Date.now()}.mp3`;
+
+    const outputPath = `uploads/${outputFile}`;
+
+    const command = ffmpeg();
+
+    files.forEach(file => {
+      command.input(file);
+    });
+            console.log("OUTPUT PATH", outputPath)
+
+    command.on("end", () => {
+        resolve(`/uploads/${outputFile}`);
+      })
+
+      .on("error", reject)
+      .mergeToFile(outputPath);
+  });
   }
 
   async generateImage(prompt: string): Promise<string> {

@@ -5,10 +5,11 @@ import { AiService } from '@/ai/ai.service';
 import { promptModification, buildStoryPrompt } from './prompt/story.prompt';
 import { UpdateStoryDto } from './Dto/update-story.dto';
 import * as path from "path";
+import { FirebaseService } from '@/ai/firebase.service';
 
 @Injectable()
 export class StoryService {
-  constructor(private readonly aiService: AiService) {}
+  constructor(private readonly aiService: AiService, private readonly firebaseService: FirebaseService,) {}
 
   private calculateAge(birthDate: Date): number {
     const today = new Date();
@@ -24,115 +25,20 @@ export class StoryService {
     return age;
   }
 
-//   async generateStory(dto: CreateStoryDto, userId: number) {
-//     const child = await prisma.user.findFirst({
-//       where: { id: dto.childId , parentId: userId },
-//     });
-
-//     if (!child) {
-//       throw new NotFoundException('Child not found');
-//     }
-
-//     const age = child.birthDate ? this.calculateAge(child.birthDate) : 7;
-
-//     const prompt = buildStoryPrompt({
-//       age,
-//       firstName: child.firstName,
-//       gender:child.gender || 'unspecified',
-//       interests: child.interests || [],
-//       blockedTopics: child.blockedTopics || [],
-
-//       educationalGoal: dto.educationalGoal,
-//       storyType: dto.storyType,
-//       storyLength: dto.storyLength,
-
-//       readingLevel: child.readingLevel || '',
-//     });
-
-//     const aiResponse = await this.aiService.generateStory(prompt);
-//     console.log(aiResponse);
-
-//     const cleaned = aiResponse
-//   .replace(/```json/g, "")
-//   .replace(/```/g, "")
-//   .trim();
-//     const parsed = JSON.parse(cleaned);
-
-//     const story = await prisma.story.create({
-//       data: {
-//         title: parsed.title,
-//         content: parsed.content,
-
-//         educationalGoal: dto.educationalGoal,
-//         storyType: dto.storyType,
-//         storyLength: dto.storyLength,
-
-//         hasImages: dto.withImages,
-//         hasAudio: dto.withAudio,
-
-//         childId: dto.childId,
-//       },
-//     });
-//     const savedScenes : any[] = [];
-//     for (const scene of parsed.scenes) {
-//       let imageUrl : string | null = null;
-//       if (dto.withImages && scene.imagePrompt) {
-//         imageUrl = await this.aiService.generateImage(scene.imagePrompt);
-//       }
-
-      
-//       const savedScene = await prisma.storyScene.create({
-//         data: {
-//           storyId: story.id,
-
-//           sceneOrder: scene.sceneOrder,
-
-//           title: scene.title,
-
-//           content: scene.content,
-//           imagePrompt: scene.imagePrompt,
-
-//           imageUrl,
-//         },
-//       });
-//       savedScenes.push(savedScene);
-//     }
-
-//     let audioUrl: string | null = null;
-//     if (dto.withAudio) {
-//         const fullStoryText = `
-// ${parsed.title}.
-
-// ${parsed.content}.
-
-// ${parsed.scenes
-//   .map(
-//     (scene: any) =>
-//       `${scene.title}. ${scene.content}`
-//   )
-//   .join(' ')}
-// `;
-//       const audioFile = await this.aiService.textToSpeech(fullStoryText);
-//       audioUrl = `/uploads/${audioFile}`;
-//       await prisma.story.update({
-//         where: { id: story.id },
-//         data: { audioUrl, hasAudio: true },
-//       });
-//     }
-//     return { story: {
-//     id: story.id,
-//     childId:story.childId,
-//     title: story.title,
-//     status:story.status,
-//     content: story.content,
-//     audioUrl: audioUrl,
-//   }, scenes: savedScenes };
-//   }
-
     async generateStory(dto: CreateStoryDto, userId: number) {
     const child = await prisma.user.findFirst({
         where: { id: dto.childId, parentId: userId },
     });
+
+    const currentUser = await prisma.user.findUnique({
+    where: {
+        id: userId,
+    },
+    });
+
+    if (!currentUser?.fcmToken) {
+    console.log("No FCM token found");
+    }
 
     if (!child) {
         throw new NotFoundException('Child not found');
@@ -152,7 +58,12 @@ export class StoryService {
         readingLevel: child.readingLevel || '',
     });
 
-console.log("STEP 1");
+    if (currentUser?.fcmToken) {
+    await this.firebaseService.sendProgressNotification(
+        currentUser.fcmToken,
+        '✍️ Writing story...',
+    );
+    }
     const aiResponse = await this.aiService.generateStory(prompt);
 
     const cleaned = aiResponse
@@ -175,91 +86,65 @@ console.log("STEP 1");
         childId: dto.childId,
         },
     });
-console.log(
-  "STORY SAVED",
-  story.id
-);
-    // -------------------------
-    // 2. AUDIO + TRANSCRIPT + TIMELINE (BEFORE SCENES LOOP)
-    // -------------------------
 
     let audioUrl: string | null = null;
-    let timelineData: any = null;
+    // let timelineData: any = null;
 
-    if (dto.withAudio) {
-        const fullStoryText = `
-    ${parsed.title}
+    let currentTime = 0;
 
-    ${parsed.content}
-
-    ${parsed.scenes
-    .map((scene: any) => `${scene.title}. ${scene.content}`)
-    .join(' ')}
-    `;
-
-    console.log("STEP 2");
-
-        const audioFile = await this.aiService.textToSpeech(fullStoryText);
-        const fullAudioPath = path.join(
-        process.cwd(),
-        "uploads",
-        audioFile,
-        );
-
-console.log("FULL AUDIO PATH", fullAudioPath);
-
-console.log("STEP 3");
-
-const transcript =
-  await this.aiService.speechToText(fullAudioPath);
-        audioUrl = `/uploads/${audioFile}`;
-
-        await prisma.story.update({
-        where: { id: story.id },
-        data: { audioUrl, hasAudio: true },
-        });
-
-        // IMPORTANT: pass file path correctly
-        // const transcript = await this.aiService.speechToText(audioUrl);
-
-        console.log("STEP 4");
-
-        timelineData = await this.aiService.generateSceneTimeline(
-        parsed.scenes,
-        transcript,
-        );
-        console.log("STEP 5");
-        console.log("TRANSCRIPT", transcript);
-
-        console.log(
-        "TIMELINE",
-        JSON.stringify(timelineData, null, 2)
-        );
-
-    }
-
-    // -------------------------
-    // 3. SAVE SCENES (NOW SAFE)
-    // -------------------------
+    const sceneAudioFiles: string[] = [];
 
     const savedScenes: any[] = [];
-        console.log(
-        JSON.stringify(
-            timelineData,
-            null,
-            2
-        )
+
+    if (dto.withImages) {
+        if (currentUser?.fcmToken){
+            await this.firebaseService.sendProgressNotification(
+                currentUser.fcmToken,
+                '🎨 Creating illustrations...',
+            );
+        }
+    }
+
+    if (dto.withAudio) {
+    if (currentUser?.fcmToken) {
+        await this.firebaseService.sendProgressNotification(
+            currentUser.fcmToken,
+            '🎤 Generating narration...',
         );
+    }
+    }
     for (const scene of parsed.scenes) {
         let imageUrl: string | null = null;
-
         if (dto.withImages && scene.imagePrompt) {
-        imageUrl = await this.aiService.generateImage(scene.imagePrompt);
+            imageUrl = await this.aiService.generateImage(
+                scene.imagePrompt,
+            );
+        }
+        
+        let sceneAudioUrl: string | null = null;
+        let duration = 0;
+
+        if (dto.withAudio) {
+
+            const audio = await this.aiService.textToSpeech(`${scene.title}. ${scene.content}`);
+
+            
+            sceneAudioUrl = `/uploads/${audio.fileName}`;
+
+            duration = audio.duration;
+
+            sceneAudioFiles.push(audio.filePath);
         }
 
-        const timeline = timelineData?.timeline?.find(
-        (t) => t.sceneOrder === scene.sceneOrder,
-        );
+        const startTime = currentTime;
+
+        const endTime = currentTime + duration;
+
+        currentTime = endTime;
+
+        // const timeline = timelineData?.timeline?.find(
+        // (t) => t.sceneOrder === scene.sceneOrder,
+        // );
 
         const savedScene = await prisma.storyScene.create({
         data: {
@@ -269,13 +154,31 @@ const transcript =
             content: scene.content,
             imagePrompt: scene.imagePrompt,
             imageUrl,
-
-            startTime: timeline?.start ?? 0,
-            endTime: timeline?.end ?? 5,
+            audioUrl: sceneAudioUrl,
+            duration,
+            startTime,
+            endTime,
         },
         });
 
         savedScenes.push(savedScene);
+    }
+
+    let finalAudioUrl: string | null = null;
+
+    if (dto.withAudio &&sceneAudioFiles.length) {
+
+    
+    finalAudioUrl = await this.aiService.mergeAudioFiles(sceneAudioFiles);
+
+    await prisma.story.update({
+        where: {
+        id: story.id,
+        },
+        data: {
+        audioUrl: finalAudioUrl,
+        },
+    });
     }
 
     // -------------------------
@@ -289,7 +192,7 @@ const transcript =
         title: story.title,
         status: story.status,
         content: story.content,
-        audioUrl,
+        audioUrl:finalAudioUrl,
         },
         scenes: savedScenes,
     };
