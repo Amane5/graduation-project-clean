@@ -1,40 +1,52 @@
-  deploy-to-vps:
+name: Deploy NestJS to VPS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
     runs-on: ubuntu-latest
-    environment: dev
 
     steps:
-      - name: Set up SSH
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Add VPS to known hosts
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run build
+        run: npm run build
+
+      - name: Create SSH key
         run: |
           mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p ${{ secrets.VPS_PORT }} ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Deploy NestJS app on VPS
+      - name: Deploy to VPS
         run: |
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
-            set -e
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.VPS_PORT }}" \
+            ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/nest-app
 
-            echo "Going to project directory..."
-            cd /kidspark.ai
+      - name: Install & restart app on VPS
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.VPS_PORT }} \
+          ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            cd /var/www/nest-app
 
-            echo "Pulling latest code..."
-            git fetch origin main
-            git reset --hard origin/main
-
-            echo "Installing dependencies..."
-            npm ci
-
-            echo "Building NestJS project..."
+            npm install
             npm run build
 
-            echo "Restarting NestJS app..."
-            pm2 restart kidspark.ai
-
-            echo "Deployment completed successfully."
+            pm2 restart nest-app || pm2 start dist/main.js --name nest-app
+            pm2 save
           EOF
