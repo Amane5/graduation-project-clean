@@ -1,9 +1,10 @@
 import { JwtAuthGuard } from '@/auth/guards/jwt.guard';
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Put, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { QuestionsService } from './questions.service';
 import { CreateQuestionDto } from './dto/create-questions.dto';
 import { UpdateQuestionDto } from './dto/update-questions.dto';
 import { SubmitAnswersDto } from './dto/submit-answer.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('questions')
 export class QuestionsController {
@@ -65,6 +66,24 @@ export class QuestionsController {
         req.user.sub,
         storyId,
         dto,
+    );
+    }
+
+    @Post(':questionId/tts')
+    @UseGuards(JwtAuthGuard)
+    async textToSpeech(@Req() req, @Body() @Param('questionId', ParseIntPipe) questionId:number) {
+    return this.questionsService.generateQuestionAudio(req.user.sub, questionId);
+    }
+
+    @Post(':questionId/speech-to-text')
+    @UseGuards(JwtAuthGuard)
+    @UseInterceptors(FileInterceptor('audio'))
+    async speechToText(@UploadedFile() file: Express.Multer.File,@Param('questionId', ParseIntPipe) questionId: number) {
+    console.log(file);
+
+    return this.questionsService.transcribeAnswer(
+        questionId,
+        file,
     );
     }
 }

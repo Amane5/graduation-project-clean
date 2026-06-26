@@ -123,7 +123,7 @@ export class AiController {
       for (const file of files) {
         // AUDIO
         if (file.mimetype.startsWith('audio')) {
-          audioTranscription = await this.aiService.speechToText(file.path);
+          audioTranscription = await this.aiService.speechToText(file.buffer);
 
           finalQuestion = [finalQuestion, audioTranscription]
             .filter(Boolean)
@@ -281,7 +281,7 @@ export class AiController {
       );
       }
 
-      const audioFile = await this.aiService.textToSpeech(fullText);
+      const audioFile = await this.aiService.textToSpeechChat(fullText);
       audioUrl = `/uploads/${audioFile}`;
       console.log('FINAL AI RESPONSE:');
       console.log(fullText);

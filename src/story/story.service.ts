@@ -349,43 +349,65 @@ export class StoryService {
         }
     })
 
+    let currentTime = 0;
+
+    const sceneAudioFiles: string[] = [];
     let audioUrl = story.audioUrl;
 
-    
-    if(story.hasAudio){
-        const fullStoryText = `
-        ${dto.title || story.title}.
+    for(const scene of updatedScenes){
+        if(story.hasAudio){
+            const audio = await this.aiService.textToSpeech(`${scene.title}. ${scene.content}`);
+            const duration = audio.duration;
 
-        ${dto.content || story.content}.
+            const startTime = currentTime;
 
-        ${updatedScenes
-        .map(
-            (scene) =>
-            `${scene.title}. ${scene.content}`
-        )
-        .join(' ')}
-        `;
-        const audioFile = await this.aiService.textToSpeech(fullStoryText)
-        const audioUrl = `/uploads/${audioFile}`;
-        await prisma.story.update({
-        where: {
-            id: storyId,
-        },
+            const endTime = currentTime + duration;
 
-        data: {
-            audioUrl,
-        },
-        });
+            currentTime = endTime;
+
+            await prisma.storyScene.update({
+            where: {
+                id: scene.id,
+            },
+
+            data: {
+                audioUrl: `/uploads/${audio.fileName}`,
+                duration,
+                startTime,
+                endTime,
+            },
+            });
+            sceneAudioFiles.push(audio.filePath);
+        }
+        
     }
+        let finalAudioUrl = story.audioUrl
+        if(story.hasAudio && sceneAudioFiles.length > 0){
+            finalAudioUrl = await this.aiService.mergeAudioFiles(sceneAudioFiles);
+            await prisma.story.update({
+            where: {
+                id: storyId,
+            },
+
+            data: {
+                audioUrl: finalAudioUrl,
+            },
+            });
+        }
+    
 
     //final updated story
-    const updatedStory =
-    await prisma.story.findUnique({
+    const updatedStory = await prisma.story.findUnique({
       where: {
         id: storyId,
       },
     });
     
+    const finalScenes = await prisma.storyScene.findMany({
+   where:{ storyId },
+   orderBy:{ sceneOrder:'asc' }
+ });
+
     return {
     story: {
       id: updatedStory?.id,
@@ -400,7 +422,7 @@ export class StoryService {
       questionsApproved: false
     },
 
-    scenes: updatedScenes,
+    scenes: finalScenes,
   };
   }
 
@@ -471,12 +493,12 @@ export class StoryService {
         let parsed
         try{
             parsed = JSON.parse(cleaned);
+            console.log(parsed.educationalGoal);
         }catch{
             throw new BadRequestException('Invalid AI response')
         }
 
-        const storyTextChanged =
-        JSON.stringify(
+        const storyTextChanged = JSON.stringify(
             parsed.scenes.map((s:any)=>({
                 title:s.title,
                 content:s.content
@@ -493,6 +515,7 @@ export class StoryService {
         ||
         parsed.content !== currentStory.content;
 
+        parsed.educationalGoal = parsed.educationalGoal || currentStory.educationalGoal;
         await prisma.storyEditMessage.create({
                 data:{
                     storyId,
@@ -507,18 +530,22 @@ export class StoryService {
             title: parsed.title,
 
             content: parsed.content,
+            educationalGoal: parsed.educationalGoal,
 
             status: "DRAFT",
             isApproved: false,
             questionsApproved: false,
             },
         });
-
+console.log("NEW GOAL:", parsed.educationalGoal);
         await prisma.storyScene.deleteMany({
             where:{storyId}
         })
 
         const savedScenes: any[] = [];
+        let currentTime = 0;
+
+        const sceneAudioFiles: string[] = [];
 
         for (const newScene of parsed.scenes) {
 
@@ -570,42 +597,52 @@ export class StoryService {
         savedScenes.push(savedScene);
         }
 
-    let updatedAudioUrl =
-        currentStory.audioUrl;
+        let updatedAudioUrl = currentStory.audioUrl;
 
     // regenerate audio ONLY if text changed
-        if (currentStory.hasAudio && storyTextChanged) {
+        for(const scene of savedScenes){
+            if(currentStory.hasAudio && storyTextChanged){
+                const audio = await this.aiService.textToSpeech(`${scene.title}. ${scene.content}`);
+                const duration = audio.duration;
+                const startTime = currentTime;
+                const endTime = currentTime + duration;
+                currentTime = endTime;
+                await prisma.storyScene.update({
+                where: {
+                    id: scene.id,
+                },
 
-            const fullStoryText = `
-            ${parsed.title}
-
-            ${parsed.content}
-
-            ${parsed.scenes
-            .map(
-                (scene: any) =>
-                `${scene.title}. ${scene.content}`,
-            )
-            .join(' ')}
-            `;
-
-            const audioFile =
-            await this.aiService.textToSpeech(
-                fullStoryText,
-            );
-
-            updatedAudioUrl =
-            `/uploads/${audioFile}`;
+                data: {
+                    audioUrl: `/uploads/${audio.fileName}`,
+                    duration,
+                    startTime,
+                    endTime,
+                },
+                });
+                sceneAudioFiles.push(audio.filePath);
+            }
+        }
+        let finalAudioUrl = currentStory.audioUrl;
+        if (currentStory.hasAudio && storyTextChanged && sceneAudioFiles.length > 0) {
+            console.log("AUDIO FILES");
+console.log(sceneAudioFiles);
+            finalAudioUrl = await this.aiService.mergeAudioFiles(sceneAudioFiles);
 
             await prisma.story.update({
-            where: { id: storyId },
-
-            data: {
-                audioUrl: updatedAudioUrl,
-            },
+                where: {
+                id: storyId,
+                },
+                data: {
+                audioUrl: finalAudioUrl,
+                },
             });
         }
 
+        const finalScenes =
+ await prisma.storyScene.findMany({
+   where:{ storyId },
+   orderBy:{ sceneOrder:'asc' }
+ });
     return {
         story: {
         id: storyId,
@@ -613,14 +650,14 @@ export class StoryService {
         title: parsed.title,
 
         content: parsed.content,
-
-        audioUrl: updatedAudioUrl,
+        educationalGoal: parsed.educationalGoal,
+        audioUrl: finalAudioUrl,
         status: "DRAFT",
         isApproved: false,
         questionsApproved: false
         },
 
-        scenes: savedScenes,
+        scenes: finalScenes,
 
         summaryOfChanges:
         parsed.summaryOfChanges,

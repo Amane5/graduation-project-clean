@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 // import ffmpegPath from "ffmpeg-static";
 import { parseFile } from "music-metadata";
 import ffmpeg from "fluent-ffmpeg";
-
+import { toFile } from "openai/uploads";
 // import ffprobe from "ffprobe-static";
 
 // ffmpeg.setFfmpegPath(ffmpegPath as string);
@@ -318,30 +318,37 @@ console.log(systemPrompt);
     return response.choices[0].message.content || 'No image explanation';
   }
 
-  async speechToText(audioPath: string): Promise<string> {
-    const response = await this.openai.audio.transcriptions.create({
-      file: fs.createReadStream(audioPath),
-      model: 'gpt-4o-transcribe',
+  async speechToText(audioBuffer: Buffer) {
+
+    const file = await toFile(
+      audioBuffer,
+      "answer.webm"
+    );
+
+    const transcription =
+      await this.openai.audio.transcriptions.create({
+        file,
+        model: "gpt-4o-mini-transcribe",
+      });
+
+    return transcription.text;
+  }
+  
+  async textToSpeechChat(text: string): Promise<string> {
+    const response = await this.openai.audio.speech.create({
+      model: 'gpt-4o-mini-tts',
+      voice: 'alloy',
+      input: text,
     });
 
-    return response.text;
+    const fileName = `audio-${Date.now()}.mp3`;
+    const filePath = `uploads/${fileName}`;
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    fs.writeFileSync(filePath, buffer);
+
+    return fileName;
   }
-
-  // async textToSpeech(text: string): Promise<string> {
-  //   const response = await this.openai.audio.speech.create({
-  //     model: 'gpt-4o-mini-tts',
-  //     voice: 'alloy',
-  //     input: text,
-  //   });
-
-  //   const fileName = `audio-${Date.now()}.mp3`;
-  //   const filePath = `uploads/${fileName}`;
-
-  //   const buffer = Buffer.from(await response.arrayBuffer());
-  //   fs.writeFileSync(filePath, buffer);
-
-  //   return fileName;
-  // }
 
   async textToSpeech(text: string) {
     const response =
@@ -804,5 +811,146 @@ Rules:
 
   Answer naturally like a teacher talking to a child.
 `
+}
+
+async questionTextToSpeech(text: string) {
+  const response = await this.openai.audio.speech.create({
+    model: "gpt-4o-mini-tts",
+    voice: "alloy",
+    input: text,
+  });
+
+  const fileName = `question-${Date.now()}.mp3`;
+  const filePath = `uploads/${fileName}`;
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  fs.writeFileSync(filePath, buffer);
+
+  const metadata = await parseFile(filePath);
+
+  return {
+    fileName,
+    filePath,
+    duration: metadata.format.duration || 0,
+  };
+}
+
+async classifyAnalytics(question: string, answer: string) {
+  return this.openai.chat.completions.create({
+    model: 'gpt-4.1-mini',
+    messages: [
+      {
+        role: 'system',
+        content: `
+        You are a STRICT child learning analytics engine.
+
+        RULES:
+        - DO NOT guess
+        - DO NOT hallucinate
+        - If data is insufficient → return empty values
+        - Only extract observable signals
+
+        emotionalSignal:
+
+        Allowed values only:
+
+        happy
+        curious
+        excited
+        frustrated
+        confused
+        sad
+        anxious
+        neutral
+
+        If not enough evidence:
+        return empty string
+
+        Return ONLY valid JSON:
+
+        {
+        "category": "",
+        "subcategory": "",
+        "curiosityScore": 0,
+        "creativityScore": 0,
+        "analyticalScore": 0,
+        "emotionalSignal": "",
+        "skills": []
+        }
+            `,
+      },
+      {
+        role: 'user',
+        content: `Question: ${question}\nAnswer: ${answer}`,
+      },
+    ],
+  });
+}
+
+async generateRecommendations(report: any): Promise<string[]> {
+  const response = await this.openai.chat.completions.create({
+    model: 'gpt-4.1-mini',
+    messages: [
+      {
+        role: 'system',
+        content: `
+You are a parenting expert.
+
+RULES:
+- Use ONLY provided data
+- Do NOT guess
+- If data is insufficient, return empty arrays
+- Be practical and actionable
+
+Return ONLY JSON:
+
+{
+  "strengths": [],
+  "recommendations": [],
+  "activities": [],
+  "warnings": []
+}
+        `,
+      },
+      {
+        role: 'user',
+        content: JSON.stringify(report),
+      },
+    ],
+  });
+
+  const content =
+    response.choices[0].message.content;
+
+  if (!content) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(content);
+
+    return parsed.recommendations || [];
+  } catch {
+    return [];
+  }
+}
+
+async askAnalytics(prompt: string) {
+  const response =
+    await this.openai.chat.completions.create({
+      model: 'gpt-4.1-mini',
+
+      messages: [
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+    });
+
+  return (
+    response.choices[0]
+      .message.content || ''
+  );
 }
 }
