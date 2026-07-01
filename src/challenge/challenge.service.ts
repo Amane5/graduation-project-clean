@@ -76,31 +76,59 @@ export class ChallengeService {
     }
 
     async getChallenges(parentId:number){
-        return prisma.challenge.findMany({
-                where:{
-                    parentId
-                },
+    return prisma.challenge.findMany({
+            where:{
+                parentId
+            },
 
-                include:{
-                    participants:{
-                        include:{
-                            child:{
-                                select:{
-                                    id:true,
-                                    firstName:true
-                                }
+            include:{
+                participants:{
+                    include:{
+                        child:{
+                            select:{
+                                id:true,
+                                firstName:true
                             }
                         }
-                    },
-
-                    questions:true
+                    }
                 },
 
-                orderBy:{
-                    createdAt:'desc'
-                }
-        })
+                questions:true
+            },
+
+            orderBy:{
+                createdAt:'desc'
+            }
+    })
     }
+
+    // async getChallenge(parentId:number , challengeId:number){
+    //     console.log(parentId, challengeId)
+    // const challenge =await prisma.challenge.findFirst({
+    //     where:{
+    //         id:challengeId,
+    //         parentId
+    //     },
+
+    //     include:{
+    //         participants:{
+    //             include:{
+    //                 child:true
+    //             }
+    //         },
+
+    //         questions:true
+    //     }
+    // })
+
+    // if(!challenge){
+    //     throw new NotFoundException(
+    //     'Challenge not found'
+    //     )
+    // }
+
+    // return challenge
+    // }
 
     async getChallenge(parentId:number , challengeId:number){
         console.log(parentId, challengeId)
@@ -113,11 +141,31 @@ export class ChallengeService {
         include:{
             participants:{
                 include:{
-                    child:true
+                    child:{
+                        select:{
+                            id:true,
+                            firstName:true,
+                            lastName:true
+                        }
+                    }
                 }
             },
 
-            questions:true
+            questions:{
+                include:{
+                    answers:{
+                        include:{
+                            child:{
+                                select:{
+                                    id:true,
+                                    firstName:true,
+                                    lastName:true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     })
 
@@ -127,7 +175,42 @@ export class ChallengeService {
         )
     }
 
-    return challenge
+    return {
+    id: challenge.id,
+    title: challenge.title,
+    description: challenge.description,
+    startAt: challenge.startAt,
+    endAt: challenge.endAt,
+    createdAt: challenge.createdAt,
+    participants: challenge.participants.map(p => ({
+        id: p.child.id,
+        firstName: p.child.firstName,
+        lastName: p.child.lastName,
+        totalScore: p.totalScore,
+    completedAt: p.completedAt,
+    })),
+
+    questions: challenge.questions.map(q => ({
+        id: q.id,
+
+        question: q.question,
+
+        expectedAnswer: q.expectedAnswer,
+
+        points: q.points,
+
+        answers:
+            q.answers.length
+            ? q.answers.map(a => ({
+                childId: a.child.id,
+                childName: a.child.firstName,
+                answer: a.answer,
+                isCorrect: a.isCorrect,
+                earnedPoints: a.earnedPoints
+            }))
+            : []
+    }))
+}
     }
 
     async updateChallenge(parentId:number , dto:UpdateChallengeDto, challengeId:number){
@@ -142,10 +225,10 @@ export class ChallengeService {
             throw new NotFoundException('Challenge not found')
         }
 
-        if(new Date() >= challenge.startAt && new Date <= challenge.endAt){
-            throw new Error('Cannot update started challenge')
+        if(new Date() >= challenge.startAt){
+            throw new Error('Cannot update challenge after it has started')
         }
-
+console.log(dto.participantIds);
         const updatedChallenge = await prisma.challenge.update({
             where:{
                 id:challengeId
@@ -477,7 +560,7 @@ export class ChallengeService {
         status: "pending",
         message: "Challenge not finished yet",
         totalScore: participant?.totalScore ?? 0,
-        answers: [],
+        answers,
         isWinner: false,
         winners: []
     };
@@ -497,8 +580,8 @@ export class ChallengeService {
     )
 
     return {
-        totalScore:
-        participant?.totalScore ?? 0,
+        status: "finished",
+        totalScore: participant?.totalScore ?? 0,
 
         isWinner,
 

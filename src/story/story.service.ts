@@ -773,4 +773,143 @@ console.log(sceneAudioFiles);
             orderBy:{createdAt:'asc'}
         })
     }
+
+    private sanitizeImagePrompt(prompt: string): string {
+  const blocked = [
+    'death',
+    'kill',
+    'suicide',
+    'self-harm',
+    'hurt',
+    'blood',
+    'injured',
+    'sad',
+    'cry',
+    'alone',
+    'pain',
+  ];
+
+  let cleaned = prompt;
+
+  for (const word of blocked) {
+    const regex = new RegExp(word, 'gi');
+    cleaned = cleaned.replace(regex, 'happy');
+  }
+
+  return cleaned;
+}
+
+  async generateStoryFromPrebuilt(parsed: any, dto: CreateStoryDto) {
+    const currentUser = await prisma.user.findUnique({
+    where: {
+        id: dto.childId,
+    },
+    });  
+  const story = await prisma.story.create({
+    data: {
+      title: parsed.title,
+      content: parsed.content,
+      educationalGoal: dto.educationalGoal,
+      storyType: dto.storyType,
+      storyLength: dto.storyLength,
+      hasImages: dto.withImages,
+      hasAudio: dto.withAudio,
+      childId: dto.childId,
+      status: "PUBLISHED",
+    },
+  });
+
+  let currentTime = 0;
+  const sceneAudioFiles: string[] = [];
+  const savedScenes: any[] = [];
+
+  if (dto.withImages) {
+        if (currentUser?.fcmToken){
+            await this.firebaseService.sendProgressNotification(
+                currentUser.fcmToken,
+                '🎨 Creating illustrations...',
+            );
+        }
+    }
+
+    if (dto.withAudio) {
+    if (currentUser?.fcmToken) {
+        await this.firebaseService.sendProgressNotification(
+            currentUser.fcmToken,
+            '🎤 Generating narration...',
+        );
+    }
+    }
+  for (const scene of parsed.scenes) {
+    let imageUrl: string | null = null;
+
+    if (dto.withImages && scene.imagePrompt) {
+      const safePrompt = this.sanitizeImagePrompt(scene.imagePrompt);
+      imageUrl = await this.aiService.generateImage(`children illustration, colorful, friendly style: ${safePrompt}`);
+    }
+
+    let sceneAudioUrl: string | null = null;
+    let duration = 0;
+
+    if (dto.withAudio) {
+      const audio = await this.aiService.textToSpeech(
+        `${scene.title}. ${scene.content}`,
+      );
+
+      sceneAudioUrl = `/uploads/${audio.fileName}`;
+      duration = audio.duration;
+      if (audio?.filePath) {
+        sceneAudioFiles.push(audio.filePath);
+        }
+    }
+
+    const startTime = currentTime;
+    const endTime = currentTime + duration;
+    currentTime = endTime;
+
+    const savedScene = await prisma.storyScene.create({
+      data: {
+        storyId: story.id,
+        sceneOrder: scene.sceneOrder,
+        title: scene.title,
+        content: scene.content,
+        imagePrompt: scene.imagePrompt,
+        imageUrl,
+        audioUrl: sceneAudioUrl,
+        duration,
+        startTime,
+        endTime,
+      },
+    });
+
+    savedScenes.push(savedScene);
+  }
+
+  let finalAudioUrl: string | null = null;
+
+  if (dto.withAudio && sceneAudioFiles.length) {
+    finalAudioUrl = await this.aiService.mergeAudioFiles(sceneAudioFiles);
+    console.log("AUDIO FILES:", sceneAudioFiles);
+    await prisma.story.update({
+      where: { id: story.id },
+      data: { audioUrl: finalAudioUrl },
+    });
+  }
+
+  const updatedStory = await prisma.story.findUnique({
+  where: { id: story.id },
+});
+
+if (currentUser?.fcmToken) {
+  await this.firebaseService.sendProgressNotification(
+    currentUser.fcmToken,
+    "✅ Story completed!"
+  );
+}
+
+return {
+  story: updatedStory,
+  scenes: savedScenes,
+};
+}
 }

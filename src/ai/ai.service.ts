@@ -953,4 +953,146 @@ async askAnalytics(prompt: string) {
       .message.content || ''
   );
 }
+
+async askVisionModel(
+  imageUrl: string,
+  prompt: string,
+): Promise<any> {
+
+  const response = await this.openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: prompt,
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: imageUrl,
+            },
+          },
+        ],
+      },
+    ],
+    response_format: {
+      type: "json_object",
+    },
+  });
+
+  return JSON.parse(
+    response.choices[0].message.content || "{}",
+  );
+}
+
+async chat(prompt: string): Promise<any> {
+
+  const response =
+    await this.openai.chat.completions.create({
+
+      model: "gpt-4.1-mini",
+
+      messages: [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+
+      response_format: {
+        type: "json_object",
+      },
+    });
+
+  return JSON.parse(
+    response.choices[0].message.content || "{}",
+  );
+}
+
+async analyzeDrawing(imageUrl: string) {
+
+    const prompt = `
+You are an expert children's storytelling assistant.
+
+Your task is:
+
+1. Carefully analyze the child's drawing.
+
+2. Identify:
+- characters
+- objects
+- places
+- emotions
+- important visual elements
+
+3. Write a structured analysis that will later be used to generate a story.
+
+Return ONLY valid JSON.
+
+{
+    "summary":"...",
+    "objects":[...],
+    "characters":[...],
+    "places":[...],
+    "style":"..."
+}
+`;
+
+    return this.askVisionModel(
+        imageUrl,
+        prompt,
+    );
+}
+
+async generateDrawingInterview(drawingAnalysis: any) {
+
+const prompt = `
+You are talking to a young child.
+
+The drawing has already been analyzed.
+
+Drawing analysis:
+
+${JSON.stringify(drawingAnalysis)}
+
+Now start a friendly interview.
+
+Rules:
+
+- Start with a warm compliment.
+
+- Do NOT explain the analysis.
+
+- Ask ONE question only.
+
+- The question must help build a future story.
+
+Return ONLY JSON.
+
+{
+    "reply":"...",
+    "finished":false
+}
+`;
+
+return this.chat(prompt);
+}
+
+async chatStrict(prompt: string) {
+  const response = await this.openai.chat.completions.create({
+    model: 'gpt-4.1-mini',
+    messages: [
+      { role: 'user', content: prompt }
+    ],
+  });
+
+  const content = response.choices[0].message.content;
+
+console.log(content);
+
+return JSON.parse(content || "{}");
+}
 }

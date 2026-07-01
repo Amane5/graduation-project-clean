@@ -49,6 +49,7 @@ model User {
   challengeParticipations ChallengeParticipant[]
 
   challengeAnswers ChallengeAnswer[]
+  drawingStorySessions   DrawingStorySession[]
   vectorStoreId   String?
 }
 
@@ -99,6 +100,8 @@ model Conversation {
   lastActivity DateTime @default(now())
 
   questions Question[]
+  stories     Story[] 
+  drawingStorySession DrawingStorySession[]
 }
 
 model TokenUsage {
@@ -117,6 +120,11 @@ model TokenUsage {
 enum StoryStatus {
   DRAFT
   PUBLISHED
+}
+
+enum StorySource {
+  PROMPT
+  DRAWING
 }
 
 model Story {
@@ -149,6 +157,49 @@ model Story {
   isApproved           Boolean @default(false)
 
   questionsApproved    Boolean @default(false)
+
+  source StorySource @default(PROMPT)
+
+  drawingImageUrl String?
+
+  drawingAnalysis Json?
+
+  conversationId Int?
+
+  conversation Conversation?  @relation(fields: [conversationId], references: [id])
+  drawingStorySession   DrawingStorySession?
+}
+
+enum DrawingStoryStatus {
+    INTERVIEWING
+    READY
+    GENERATING
+    COMPLETED
+}
+
+model DrawingStorySession {
+  id Int @id @default(autoincrement())
+  status DrawingStoryStatus @default(INTERVIEWING)
+  conversationId Int @unique
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  childId Int
+  child User @relation(fields: [childId], references: [id])
+
+  drawingImageUrl String
+
+  drawingAnalysis Json
+
+  interviewFinished Boolean @default(false)
+
+  storyId Int? @unique
+
+  story Story? @relation(fields: [storyId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+  
 }
 
 model StoryScene {
