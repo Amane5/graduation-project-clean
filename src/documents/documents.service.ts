@@ -1,8 +1,7 @@
 import { prisma } from '@/lib/prisma';
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import OpenAI from 'openai';
 import * as fs from 'fs';
-import { NotFoundError } from 'rxjs';
 
 @Injectable()
 export class DocumentsService {
@@ -11,33 +10,54 @@ export class DocumentsService {
     apiKey: process.env.OPENAI_API_KEY,
     });
 
+    private async getAuthorizedChildren(parentId: number, childIds: number[]) {
+        const normalizedChildIds = [...new Set(childIds)]
+            .map((id) => Number(id))
+            .filter((id) => Number.isInteger(id) && id > 0);
+
+        if (!normalizedChildIds.length) {
+            throw new BadRequestException('At least one child must be selected');
+        }
+
+        const children = await prisma.user.findMany({
+            where: {
+                id: { in: normalizedChildIds },
+                parentId,
+                type: 'child',
+            },
+        });
+
+        if (children.length !== normalizedChildIds.length) {
+            throw new ForbiddenException('One or more selected children are not accessible');
+        }
+
+        return {
+            childIds: normalizedChildIds,
+            children,
+        };
+    }
+
     async uploadDocuments(parentId:number , file:Express.Multer.File, childIds:number[]){
+        if (!file) {
+            throw new BadRequestException('File upload is required');
+        }
+
+        const { childIds: authorizedChildIds, children } = await this.getAuthorizedChildren(parentId, childIds);
+
         const uploadedFile = await this.openai.files.create({
             file:fs.createReadStream(file.path),
             purpose:'assistants'
         })
-        console.log('CHILD IDS:', childIds);
-         const children = await prisma.user.findMany({
-            where:{
-            id:{
-                in: childIds
-            },
-            // type:'child'
-            }
-        })
-console.log(children)
-        for(const child of children){
-   console.log('LINK FILE TO:', child.vectorStoreId)
 
+        for(const child of children){
             if(!child.vectorStoreId) continue
 
-            const linkedFile = await this.openai.vectorStores.files.create(
+            await this.openai.vectorStores.files.create(
             child.vectorStoreId,
             {
                 file_id: uploadedFile.id,
             },
             )
-            console.log('LINKED FILE:', linkedFile)
         }
         
         
@@ -52,7 +72,7 @@ console.log(children)
                 uploadedById: parentId,
 
                 children: {
-                create: childIds.map((childId) => ({
+                create: authorizedChildIds.map((childId) => ({
                     childId,
                 })),
                 },
@@ -85,13 +105,16 @@ console.log(children)
     }    
 
     async deleteDocument(parentId:number , documentId:number){
-        const document = await prisma.document.findUnique({
-            where:{id:documentId}
+        const document = await prisma.document.findFirst({
+            where:{
+                id:documentId,
+                uploadedById:parentId,
+            }
         })
         if(!document){
             throw new NotFoundException('Document not found')
         }
-        this.openai.files.delete(document.openaiFileId)
+        await this.openai.files.delete(document.openaiFileId)
 
         if(fs.existsSync(document.fileUrl)){
             fs.unlinkSync(document.fileUrl)
@@ -117,14 +140,15 @@ console.log(children)
             throw new NotFoundException('Document not found')
         }
 
+        const { childIds: authorizedChildIds, children } = await this.getAuthorizedChildren(parentId, childIds);
+        const childrenById = new Map(children.map((child) => [child.id, child]));
+
         const currentChildIds = document.children.map((child) => child.childId)
-        const addChildren = childIds.filter((id) => !currentChildIds.includes(id))
-        const removeChildren = currentChildIds.filter((id) => !childIds.includes(id))
+        const addChildren = authorizedChildIds.filter((id) => !currentChildIds.includes(id))
+        const removeChildren = currentChildIds.filter((id) => !authorizedChildIds.includes(id))
 
         for (const childId of addChildren) {
-            const child = await prisma.user.findUnique({
-                where: { id: childId },
-            });
+            const child = childrenById.get(childId);
 
             if (child?.vectorStoreId) {
                 await this.openai.vectorStores.files.create(

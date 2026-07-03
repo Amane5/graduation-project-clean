@@ -87,7 +87,7 @@ export class StoryService {
         },
     });
 
-    let audioUrl: string | null = null;
+    const audioUrl: string | null = null;
     // let timelineData: any = null;
 
     let currentTime = 0;
@@ -352,7 +352,7 @@ export class StoryService {
     let currentTime = 0;
 
     const sceneAudioFiles: string[] = [];
-    let audioUrl = story.audioUrl;
+    const audioUrl = story.audioUrl;
 
     for(const scene of updatedScenes){
         if(story.hasAudio){
@@ -597,7 +597,7 @@ console.log("NEW GOAL:", parsed.educationalGoal);
         savedScenes.push(savedScene);
         }
 
-        let updatedAudioUrl = currentStory.audioUrl;
+        const updatedAudioUrl = currentStory.audioUrl;
 
     // regenerate audio ONLY if text changed
         for(const scene of savedScenes){

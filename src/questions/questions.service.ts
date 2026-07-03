@@ -277,7 +277,7 @@ export class QuestionsService {
             );
         }
 
-        let savedQuestions:any[] = []
+        const savedQuestions:any[] = []
         for(const q of parsed.questions){
             const question = await prisma.storyQuestion.create({
                 data:{

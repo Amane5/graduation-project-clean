@@ -69,7 +69,7 @@ export class ChildrenService {
       });
     }
 
-    let data: any = { ...dto };
+    const data: any = { ...dto };
 
     //  password
     if (dto.password) {
