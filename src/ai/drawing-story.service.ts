@@ -1,5 +1,4 @@
 import {
-    BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -14,6 +13,21 @@ import { FirebaseService } from './firebase.service';
 @Injectable()
 export class DrawingStoryService {
     constructor(private readonly aiService:AiService, private readonly storyService:StoryService, private readonly questionService:QuestionService,private readonly firebaseService:FirebaseService){}
+
+  private async getOwnedSession(childId: number, conversationId: number) {
+    const session = await prisma.drawingStorySession.findFirst({
+      where: {
+        conversationId,
+        childId,
+      },
+    });
+
+    if (!session) {
+      throw new NotFoundException('Drawing session not found');
+    }
+
+    return session;
+  }
 
   async createSession(childId: number,drawingImageUrl: string,drawingAnalysis: any,conversationId: number ) {
     const child = await prisma.user.findUnique({
@@ -205,16 +219,7 @@ const base64Image = fs.readFileSync(file.path).toString("base64");
 
     async sendMessage(childId:number,conversationId:number,message:string){
       console.log(">>>>>>>> SEND MESSAGE CALLED <<<<<<<<");
-      const session= await prisma.drawingStorySession.findUnique({
-      where:{
-      conversationId
-      }
-
-      });
-
-      if(!session){
-      throw new NotFoundException("Drawing session not found");
-      }
+      const session = await this.getOwnedSession(childId, conversationId);
 
       if (session.interviewFinished) {
       return {
@@ -296,15 +301,8 @@ console.log("RETURNING:", {
 
 }
 
-    async getSession(conversationId:number){
-
-    return prisma.drawingStorySession.findUnique({
-
-    where:{
-    conversationId
-    }
-
-    });
+    async getSession(childId:number, conversationId:number){
+    return this.getOwnedSession(childId, conversationId);
 
     }
 
@@ -314,13 +312,7 @@ console.log("RETURNING:", {
             id: childId,
         },
         });  
-        const session = await prisma.drawingStorySession.findUnique({
-        where: { conversationId },
-        });
-
-        if (!session) {
-        throw new NotFoundException('Drawing session not found');
-        }
+        const session = await this.getOwnedSession(childId, conversationId);
 
         const messages = await prisma.question.findMany({
         where: { conversationId },

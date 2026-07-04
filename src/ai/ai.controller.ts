@@ -30,6 +30,13 @@ import { DrawingStoryService } from './drawing-story.service';
 import { StartDrawingStoryDto } from './dto/start-drawing-story.dto';
 import { GenerateDrawingStoryDto } from './dto/generate-drawing-story.dto';
 
+type AuthenticatedRequest = Request & {
+  user: {
+    sub: number;
+    type: string;
+  };
+};
+
 @Controller('ai')
 export class AiController {
   constructor(
@@ -433,7 +440,7 @@ export class AiController {
 
   @Post('drawing-story/message')
   @UseGuards(JwtAuthGuard)
-  async sendDrawingStoryMessage(@Req() req,@Body() body: { conversationId: number; message: string }) {
+  async sendDrawingStoryMessage(@Req() req: AuthenticatedRequest,@Body() body: { conversationId: number; message: string }) {
     return this.drawingStoryService.sendMessage(
       req.user.sub,
       body.conversationId,
@@ -443,14 +450,13 @@ export class AiController {
 
   @Post('drawing-story/generate-story')
   @UseGuards(JwtAuthGuard)
-  async generateStoryFromDrawing(@Req() req , @Body() dto:GenerateDrawingStoryDto){
+  async generateStoryFromDrawing(@Req() req: AuthenticatedRequest , @Body() dto:GenerateDrawingStoryDto){
     return this.drawingStoryService.generateStoryFromDrawing(req.user.sub, dto.conversationId)
   }
 
   @Get('drawing-story/session/:conversationId')
-  async getSession(@Req() req, @Param('conversationId') id: number) {
-  return prisma.drawingStorySession.findUnique({
-    where: { conversationId: Number(id) }
-  });
+  @UseGuards(JwtAuthGuard)
+  async getSession(@Req() req: AuthenticatedRequest, @Param('conversationId') id: number) {
+    return this.drawingStoryService.getSession(req.user.sub, Number(id));
 }
 }
