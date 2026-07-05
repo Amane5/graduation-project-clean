@@ -6,10 +6,11 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { join } from 'path';
 import * as express from 'express';
+import { NestExpressApplication } from '@nestjs/platform-express';
 
 dotenv.config();
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
 
   app.enableCors({
@@ -22,6 +23,9 @@ async function bootstrap() {
     transform:true,
     whitelist:true
   }));
+  app.useStaticAssets(join(__dirname, '..', 'uploads'), {
+    prefix: '/uploads/',
+  });
   await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();

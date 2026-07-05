@@ -11,9 +11,12 @@ import { StoryModule } from './story/story.module';
 import { DocumentsModule } from './documents/documents.module';
 import { QuestionsModule } from './questions/questions.module';
 import { ReportsModule } from './reports/reports.module';
+import { AnalyticsModule } from './analytics/analytics.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { ChallengeModule } from './challenge/challenge.module';
 
 
 @Module({
-  imports: [QuestionModule, AiModule, AuthModule, ChildrenModule, ConversationModule, HistoryModule, StoryModule, DocumentsModule, QuestionsModule, ReportsModule],
+  imports: [QuestionModule, AiModule, AuthModule, ChildrenModule, ConversationModule, HistoryModule, StoryModule, DocumentsModule, QuestionsModule, ReportsModule, AnalyticsModule,ScheduleModule.forRoot(), ChallengeModule],
 })
 export class AppModule {}

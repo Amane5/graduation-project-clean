@@ -11,6 +11,8 @@ import {
   ForbiddenException,
   Get,
   Req,
+  UploadedFile,
+  Param,
 } from '@nestjs/common';
 import { Response, Request } from 'express';
 import { AiService } from './ai.service';
@@ -18,12 +20,22 @@ import { QuestionService } from 'src/question/question.service';
 import { ConversationService } from '../conversation/conversation.service';
 import { FirebaseService } from './firebase.service';
 import { JwtAuthGuard } from '@/auth/guards/jwt.guard';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { AskQuestionDto } from '@/question/dto/ask-question.dto';
 import { prisma } from '@/lib/prisma';
 import { JsonWebTokenError } from '@nestjs/jwt';
+import { DrawingStoryService } from './drawing-story.service';
+import { StartDrawingStoryDto } from './dto/start-drawing-story.dto';
+import { GenerateDrawingStoryDto } from './dto/generate-drawing-story.dto';
+
+type AuthenticatedRequest = Request & {
+  user: {
+    sub: number;
+    type: string;
+  };
+};
 
 @Controller('ai')
 export class AiController {
@@ -33,6 +45,7 @@ export class AiController {
     private readonly questionService: QuestionService,
     private readonly conversationService: ConversationService,
     private readonly firebaseService: FirebaseService,
+    private readonly drawingStoryService:DrawingStoryService
   ) {}
 
   private calculateAge(birthDate: Date): number {
@@ -121,9 +134,10 @@ export class AiController {
     // PROCESS FILES
     if (files && files.length > 0) {
       for (const file of files) {
+        console.log(files);
         // AUDIO
         if (file.mimetype.startsWith('audio')) {
-          audioTranscription = await this.aiService.speechToText(file.path);
+          audioTranscription = await this.aiService.speechToText(file.buffer);
 
           finalQuestion = [finalQuestion, audioTranscription]
             .filter(Boolean)
@@ -281,7 +295,7 @@ export class AiController {
       );
       }
 
-      const audioFile = await this.aiService.textToSpeech(fullText);
+      const audioFile = await this.aiService.textToSpeechChat(fullText);
       audioUrl = `/uploads/${audioFile}`;
       console.log('FINAL AI RESPONSE:');
       console.log(fullText);
@@ -404,5 +418,45 @@ export class AiController {
     };
   }
 
+  @Post("drawing-story/start")
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(
+  FileInterceptor('image', {
+    storage: diskStorage({
+      destination: './uploads',
+      filename: (req, file, cb) => {
+        const uniqueName =
+          Date.now() + '-' + Math.round(Math.random() * 1e9);
 
+        cb(null, uniqueName + extname(file.originalname));
+      },
+    }),
+  }),
+)
+  async startDrawingStory(@Req() req,@UploadedFile() file: Express.Multer.File){
+  console.log("FILE RECEIVED:", file);
+  return this.drawingStoryService.startDrawingStory(req.user.sub, file)
+  }
+
+  @Post('drawing-story/message')
+  @UseGuards(JwtAuthGuard)
+  async sendDrawingStoryMessage(@Req() req: AuthenticatedRequest,@Body() body: { conversationId: number; message: string }) {
+    return this.drawingStoryService.sendMessage(
+      req.user.sub,
+      body.conversationId,
+      body.message,
+    );
+  }
+
+  @Post('drawing-story/generate-story')
+  @UseGuards(JwtAuthGuard)
+  async generateStoryFromDrawing(@Req() req: AuthenticatedRequest , @Body() dto:GenerateDrawingStoryDto){
+    return this.drawingStoryService.generateStoryFromDrawing(req.user.sub, dto.conversationId)
+  }
+
+  @Get('drawing-story/session/:conversationId')
+  @UseGuards(JwtAuthGuard)
+  async getSession(@Req() req: AuthenticatedRequest, @Param('conversationId') id: number) {
+    return this.drawingStoryService.getSession(req.user.sub, Number(id));
+}
 }

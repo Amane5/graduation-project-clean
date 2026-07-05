@@ -277,7 +277,7 @@ export class QuestionsService {
             );
         }
 
-        let savedQuestions:any[] = []
+        const savedQuestions:any[] = []
         for(const q of parsed.questions){
             const question = await prisma.storyQuestion.create({
                 data:{
@@ -469,5 +469,45 @@ export class QuestionsService {
             success: true,
             answers: savedAnswers
         };
+    }
+
+    async generateQuestionAudio(userId:number, questionId: number) {
+    const question = await prisma.storyQuestion.findUnique({
+        where: { id: questionId },
+        include: {
+        story: {
+            include: { child: true },
+        },
+        },
+    });
+        if (!questionId || isNaN(questionId)) {
+        throw new BadRequestException('Invalid questionId');
+        }
+
+    if (!question) {
+        throw new NotFoundException('Question not found');
+    }
+
+
+    if (question.audioUrl) {
+        return question; 
+    }
+
+    const audio = await this.aiService.questionTextToSpeech(question.question);
+
+    return prisma.storyQuestion.update({
+        where: { id: questionId },
+        data: {
+        audioUrl: `/uploads/${audio.fileName}`,
+        audioDuration: audio.duration,
+        },
+    });
+    }
+
+    async transcribeAnswer(questionId: number,file: Express.Multer.File) {
+    const text = await this.aiService.speechToText(file.buffer);
+    return {
+        text,
+    };
     }
 }

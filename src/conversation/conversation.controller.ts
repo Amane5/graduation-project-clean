@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   ParseIntPipe,
@@ -10,8 +11,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ConversationService } from './conversation.service';
-import { CreateConversationDto } from './dto/create-conversation.dto';
 import { JwtAuthGuard } from '@/auth/guards/jwt.guard';
+
+type AuthenticatedRequest = {
+  user: {
+    sub: number;
+  };
+};
 
 @Controller('conversation')
 export class ConversationController {
@@ -26,7 +32,7 @@ export class ConversationController {
 
   @Post()
   @UseGuards(JwtAuthGuard)
-  create(@Req() req, @Body('question') question: string) {
+  create(@Req() req: AuthenticatedRequest, @Body('question') question: string) {
     const userId = Number(req.user.sub);
 
     return this.conversationService.createConversation(question, userId);
@@ -34,15 +40,21 @@ export class ConversationController {
 
   @UseGuards(JwtAuthGuard)
   @Get(':userId')
-  getAll(@Param('userId') userId: string) {
-    return this.conversationService.getConversations(Number(userId));
+  getAll(@Param('userId') userId: string, @Req() req: AuthenticatedRequest) {
+    const requestedUserId = Number(userId);
+
+    if (requestedUserId !== req.user.sub) {
+      throw new ForbiddenException('Unauthorized conversation access');
+    }
+
+    return this.conversationService.getConversations(requestedUserId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Delete(':conversationId')
   deleteConversation(
     @Param('conversationId', ParseIntPipe) conversationId: number,
-    @Req() req,
+    @Req() req: AuthenticatedRequest,
   ) {
     const userId = req.user.sub;
     return this.conversationService.deleteConversation(conversationId, userId);

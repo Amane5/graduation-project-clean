@@ -109,7 +109,8 @@ IMPORTANT RULES:
 - Do not make unrelated edits
 - If the request is word replacement, replace all occurrences consistently
 - If the request is small, do only the requested change
-- Keep the same educational goal
+- If the modification changes the moral, lesson, or educational objective of the story, generate a new educationalGoal that reflects the updated story.
+- Otherwise preserve the current educationalGoal.
 - Preserve the child's interests and age appropriateness
 - Keep scene structure unchanged unless requested
 - Keep image prompts unchanged unless visuals changed
@@ -125,6 +126,7 @@ JSON format:
 {
   "title": "",
   "content": "",
+  "educationalGoal": "...",
   "scenes": [
     {
       "sceneOrder": 1,

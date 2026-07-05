@@ -3,8 +3,14 @@ import { DocumentsService } from './documents.service';
 import { JwtAuthGuard } from '@/auth/guards/jwt.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
+import { mkdirSync } from 'fs';
 import { extname } from 'path';
-import { UpdateDocumentChildrenDto } from './dto/UpdateDocumentChildrenDto.dto';
+
+type AuthenticatedRequest = {
+  user: {
+    sub: number;
+  };
+};
 
 @Controller('documents')
 export class DocumentsController {
@@ -15,7 +21,11 @@ export class DocumentsController {
     @UseInterceptors(
     FileInterceptor('file', {
     storage: diskStorage({
-      destination: './uploads',
+      destination: (_req, _file, cb) => {
+        const destination = './private-uploads/documents';
+        mkdirSync(destination, { recursive: true });
+        cb(null, destination);
+      },
       filename: (req, file, cb) => {
         const uniqueName =
           Date.now() + '-' + Math.round(Math.random() * 1e9);
@@ -26,7 +36,7 @@ export class DocumentsController {
   }),
     )
     async uploadDocuments(
-    @Req() req,
+    @Req() req: AuthenticatedRequest,
     @UploadedFile() file: Express.Multer.File,
     @Body('childIds') childIds: string | string[],
     ) {
@@ -48,20 +58,20 @@ export class DocumentsController {
     
     @Get()
     @UseGuards(JwtAuthGuard)
-    async getDocuments(@Req() req){
+    async getDocuments(@Req() req: AuthenticatedRequest){
         return this.documentService.getDocuments(req.user.sub)
     }
 
     @Delete(':id')
     @UseGuards(JwtAuthGuard)
-    async deleteDocument(@Req() req, @Param('id') id:string){
+    async deleteDocument(@Req() req: AuthenticatedRequest, @Param('id') id:string){
         return this.documentService.deleteDocument(req.user.sub, Number(id))
     }
 
     @Patch(':id/children')
     @UseGuards(JwtAuthGuard)
     async updateDocumentChildren(
-        @Req() req,
+        @Req() req: AuthenticatedRequest,
         @Param('id') id:string,
         @Body('childIds') childIds: string | string[],
     ){

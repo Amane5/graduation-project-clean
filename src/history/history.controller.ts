@@ -8,6 +8,6 @@ export class HistoryController {
   constructor(private readonly historyService: HistoryService) {}
   @Get(':userId')
   getHistory(@Param('userId') userId: number, @Req() req) {
-    return this.historyService.getHistory(req.user.id, userId);
+    return this.historyService.getHistory(req.user.sub, userId);
   }
 }

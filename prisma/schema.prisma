@@ -43,6 +43,13 @@ model User {
   answers StoryAnswer[]
   documents ChildDocument[]
   reports StoryReport[]
+
+  createdChallenges Challenge[]
+
+  challengeParticipations ChallengeParticipant[]
+
+  challengeAnswers ChallengeAnswer[]
+  drawingStorySessions   DrawingStorySession[]
   vectorStoreId   String?
 }
 
@@ -78,6 +85,8 @@ model Question {
   responseMode     String @default("normal")
 
   journeyData      Json?
+
+  analytics QuestionAnalytics?
 }
 
 model Conversation {
@@ -91,6 +100,8 @@ model Conversation {
   lastActivity DateTime @default(now())
 
   questions Question[]
+  stories     Story[] 
+  drawingStorySession DrawingStorySession[]
 }
 
 model TokenUsage {
@@ -109,6 +120,11 @@ model TokenUsage {
 enum StoryStatus {
   DRAFT
   PUBLISHED
+}
+
+enum StorySource {
+  PROMPT
+  DRAWING
 }
 
 model Story {
@@ -141,6 +157,49 @@ model Story {
   isApproved           Boolean @default(false)
 
   questionsApproved    Boolean @default(false)
+
+  source StorySource @default(PROMPT)
+
+  drawingImageUrl String?
+
+  drawingAnalysis Json?
+
+  conversationId Int?
+
+  conversation Conversation?  @relation(fields: [conversationId], references: [id])
+  drawingStorySession   DrawingStorySession?
+}
+
+enum DrawingStoryStatus {
+    INTERVIEWING
+    READY
+    GENERATING
+    COMPLETED
+}
+
+model DrawingStorySession {
+  id Int @id @default(autoincrement())
+  status DrawingStoryStatus @default(INTERVIEWING)
+  conversationId Int @unique
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  childId Int
+  child User @relation(fields: [childId], references: [id])
+
+  drawingImageUrl String
+
+  drawingAnalysis Json
+
+  interviewFinished Boolean @default(false)
+
+  storyId Int? @unique
+
+  story Story? @relation(fields: [storyId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+  
 }
 
 model StoryScene {
@@ -214,8 +273,13 @@ model StoryQuestion {
   story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
 
   question    String
+
   answers     StoryAnswer[]
   expectedAnswer String?
+
+  audioUrl       String?
+  audioDuration  Float?
+  
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -273,4 +337,128 @@ model StoryReport {
   improvements String[]
 
   createdAt DateTime @default(now())
+}
+
+model QuestionAnalytics {
+  id Int @id @default(autoincrement())
+
+  questionId Int @unique
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  category String?
+  subcategory String?
+
+  curiosityScore Int @default(0)
+  creativityScore Int @default(0)
+  analyticalScore Int @default(0)
+
+  emotionalSignal String?
+
+  skills String[]
+
+  createdAt DateTime @default(now())
+}
+
+model ChildDailyReport {
+  id Int @id @default(autoincrement())
+
+  childId Int
+
+  topCategories String[]
+  topSubcategories String[]
+
+  curiosityAvg Float
+  creativityAvg Float
+  analyticalAvg Float
+
+  emotionalSummary String?
+  recommendations String[]
+
+  insights Json
+
+  createdAt DateTime @default(now())
+}
+
+model Challenge {
+  id Int @id @default(autoincrement())
+
+  parentId Int
+
+  title String
+
+  description String?
+
+  startAt DateTime
+
+  endAt DateTime
+
+  createdAt DateTime @default(now())
+
+  parent User @relation(fields:[parentId],references:[id])
+
+  participants ChallengeParticipant[]
+
+  questions ChallengeQuestion[]
+
+  answer    ChallengeAnswer[]
+}
+
+model ChallengeParticipant {
+  challengeId Int
+
+  childId Int
+
+  totalScore Int @default(0)
+
+  completedAt DateTime?
+
+  challenge Challenge @relation(fields:[challengeId],references:[id],onDelete:Cascade)
+
+  child User @relation(fields:[childId],references:[id])
+
+  @@id([challengeId, childId])
+}
+
+model ChallengeQuestion {
+  id Int @id @default(autoincrement())
+
+  challengeId Int
+
+  question String
+
+  expectedAnswer String
+
+  points Int
+
+  createdAt DateTime @default(now())
+
+  challenge Challenge @relation(fields:[challengeId],references:[id],onDelete:Cascade)
+
+  answers ChallengeAnswer[]
+}
+
+model ChallengeAnswer {
+  id Int @id @default(autoincrement())
+
+  challengeId Int
+
+  questionId Int
+
+  childId Int
+
+  answer String
+
+  isCorrect Boolean?
+
+  earnedPoints Int @default(0)
+
+  submittedAt DateTime @default(now())
+
+  question ChallengeQuestion @relation(fields:[questionId],references:[id])
+
+  challenge Challenge @relation(fields:[challengeId],references:[id], onDelete:Cascade)
+
+  child User @relation(fields:[childId],references:[id])
+
+  @@unique([questionId, childId])
 }

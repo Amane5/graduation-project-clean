@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 // import ffmpegPath from "ffmpeg-static";
 import { parseFile } from "music-metadata";
 import ffmpeg from "fluent-ffmpeg";
-
+import { toFile } from "openai/uploads";
 // import ffprobe from "ffprobe-static";
 
 // ffmpeg.setFfmpegPath(ffmpegPath as string);
@@ -318,30 +318,37 @@ console.log(systemPrompt);
     return response.choices[0].message.content || 'No image explanation';
   }
 
-  async speechToText(audioPath: string): Promise<string> {
-    const response = await this.openai.audio.transcriptions.create({
-      file: fs.createReadStream(audioPath),
-      model: 'gpt-4o-transcribe',
+  async speechToText(audioBuffer: Buffer) {
+
+    const file = await toFile(
+      audioBuffer,
+      "answer.webm"
+    );
+
+    const transcription =
+      await this.openai.audio.transcriptions.create({
+        file,
+        model: "gpt-4o-mini-transcribe",
+      });
+
+    return transcription.text;
+  }
+  
+  async textToSpeechChat(text: string): Promise<string> {
+    const response = await this.openai.audio.speech.create({
+      model: 'gpt-4o-mini-tts',
+      voice: 'alloy',
+      input: text,
     });
 
-    return response.text;
+    const fileName = `audio-${Date.now()}.mp3`;
+    const filePath = `uploads/${fileName}`;
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    fs.writeFileSync(filePath, buffer);
+
+    return fileName;
   }
-
-  // async textToSpeech(text: string): Promise<string> {
-  //   const response = await this.openai.audio.speech.create({
-  //     model: 'gpt-4o-mini-tts',
-  //     voice: 'alloy',
-  //     input: text,
-  //   });
-
-  //   const fileName = `audio-${Date.now()}.mp3`;
-  //   const filePath = `uploads/${fileName}`;
-
-  //   const buffer = Buffer.from(await response.arrayBuffer());
-  //   fs.writeFileSync(filePath, buffer);
-
-  //   return fileName;
-  // }
 
   async textToSpeech(text: string) {
     const response =
@@ -804,5 +811,288 @@ Rules:
 
   Answer naturally like a teacher talking to a child.
 `
+}
+
+async questionTextToSpeech(text: string) {
+  const response = await this.openai.audio.speech.create({
+    model: "gpt-4o-mini-tts",
+    voice: "alloy",
+    input: text,
+  });
+
+  const fileName = `question-${Date.now()}.mp3`;
+  const filePath = `uploads/${fileName}`;
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  fs.writeFileSync(filePath, buffer);
+
+  const metadata = await parseFile(filePath);
+
+  return {
+    fileName,
+    filePath,
+    duration: metadata.format.duration || 0,
+  };
+}
+
+async classifyAnalytics(question: string, answer: string) {
+  return this.openai.chat.completions.create({
+    model: 'gpt-4.1-mini',
+    messages: [
+      {
+        role: 'system',
+        content: `
+        You are a STRICT child learning analytics engine.
+
+        RULES:
+        - DO NOT guess
+        - DO NOT hallucinate
+        - If data is insufficient → return empty values
+        - Only extract observable signals
+
+        emotionalSignal:
+
+        Allowed values only:
+
+        happy
+        curious
+        excited
+        frustrated
+        confused
+        sad
+        anxious
+        neutral
+
+        If not enough evidence:
+        return empty string
+
+        Return ONLY valid JSON:
+
+        {
+        "category": "",
+        "subcategory": "",
+        "curiosityScore": 0,
+        "creativityScore": 0,
+        "analyticalScore": 0,
+        "emotionalSignal": "",
+        "skills": []
+        }
+            `,
+      },
+      {
+        role: 'user',
+        content: `Question: ${question}\nAnswer: ${answer}`,
+      },
+    ],
+  });
+}
+
+async generateRecommendations(report: any): Promise<string[]> {
+  const response = await this.openai.chat.completions.create({
+    model: 'gpt-4.1-mini',
+    messages: [
+      {
+        role: 'system',
+        content: `
+You are a parenting expert.
+
+RULES:
+- Use ONLY provided data
+- Do NOT guess
+- If data is insufficient, return empty arrays
+- Be practical and actionable
+
+Return ONLY JSON:
+
+{
+  "strengths": [],
+  "recommendations": [],
+  "activities": [],
+  "warnings": []
+}
+        `,
+      },
+      {
+        role: 'user',
+        content: JSON.stringify(report),
+      },
+    ],
+  });
+
+  const content =
+    response.choices[0].message.content;
+
+  if (!content) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(content);
+
+    return parsed.recommendations || [];
+  } catch {
+    return [];
+  }
+}
+
+async askAnalytics(prompt: string) {
+  const response =
+    await this.openai.chat.completions.create({
+      model: 'gpt-4.1-mini',
+
+      messages: [
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+    });
+
+  return (
+    response.choices[0]
+      .message.content || ''
+  );
+}
+
+async askVisionModel(
+  imageUrl: string,
+  prompt: string,
+): Promise<any> {
+
+  const response = await this.openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: prompt,
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: imageUrl,
+            },
+          },
+        ],
+      },
+    ],
+    response_format: {
+      type: "json_object",
+    },
+  });
+
+  return JSON.parse(
+    response.choices[0].message.content || "{}",
+  );
+}
+
+async chat(prompt: string): Promise<any> {
+
+  const response =
+    await this.openai.chat.completions.create({
+
+      model: "gpt-4.1-mini",
+
+      messages: [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+
+      response_format: {
+        type: "json_object",
+      },
+    });
+
+  return JSON.parse(
+    response.choices[0].message.content || "{}",
+  );
+}
+
+async analyzeDrawing(imageUrl: string) {
+
+    const prompt = `
+You are an expert children's storytelling assistant.
+
+Your task is:
+
+1. Carefully analyze the child's drawing.
+
+2. Identify:
+- characters
+- objects
+- places
+- emotions
+- important visual elements
+
+3. Write a structured analysis that will later be used to generate a story.
+
+Return ONLY valid JSON.
+
+{
+    "summary":"...",
+    "objects":[...],
+    "characters":[...],
+    "places":[...],
+    "style":"..."
+}
+`;
+
+    return this.askVisionModel(
+        imageUrl,
+        prompt,
+    );
+}
+
+async generateDrawingInterview(drawingAnalysis: any) {
+
+const prompt = `
+You are talking to a young child.
+
+The drawing has already been analyzed.
+
+Drawing analysis:
+
+${JSON.stringify(drawingAnalysis)}
+
+Now start a friendly interview.
+
+Rules:
+
+- Start with a warm compliment.
+
+- Do NOT explain the analysis.
+
+- Ask ONE question only.
+
+- The question must help build a future story.
+
+Return ONLY JSON.
+
+{
+    "reply":"...",
+    "finished":false
+}
+`;
+
+return this.chat(prompt);
+}
+
+async chatStrict(prompt: string) {
+  const response = await this.openai.chat.completions.create({
+    model: 'gpt-4.1-mini',
+    messages: [
+      { role: 'user', content: prompt }
+    ],
+  });
+
+  const content = response.choices[0].message.content;
+
+console.log(content);
+
+return JSON.parse(content || "{}");
 }
 }

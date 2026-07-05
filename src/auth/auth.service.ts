@@ -305,7 +305,7 @@ export class AuthService {
         const authHeader = req.headers.authorization;
         const token = authHeader.split(' ')[1];
       
-        const decoded = this.jwtService.decode(token) as any;
+        const decoded = this.jwtService.decode(token);
       
         await prisma.blacklistedToken.create({
           data: {
