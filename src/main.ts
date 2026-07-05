@@ -14,7 +14,7 @@ async function bootstrap() {
   app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
 
   app.enableCors({
-    origin: ["http://localhost:8080", "http://192.168.0.209:8080", "http://192.168.56.1:8080", "https://backend.husamkashko.duckdns.org", "http://109.199.110.250"],
+    origin: ["http://localhost:8080", "http://192.168.0.209:8080", "http://192.168.56.1:8080", "https://graduation-project-frontend-nu.vercel.app"],
     credentials: true,
   });
   app.useGlobalFilters(new HttpExceptionFilter());
