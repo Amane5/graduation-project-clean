@@ -19,8 +19,11 @@ COPY tsconfig*.json ./
 COPY nest-cli.json ./
 COPY src ./src
 
-# Important: generate Prisma Client inside Docker
-RUN npx prisma generate
+# Important: generate Prisma Client inside Docker.
+# `prisma generate` doesn't connect to the DB, but Prisma 7 eagerly resolves
+# env("DATABASE_URL") from prisma.config.ts when loading config, so we pass a
+# throwaway value here. The real DATABASE_URL is injected at runtime.
+RUN DATABASE_URL="postgresql://user:password@localhost:5432/db?schema=public" npx prisma generate
 
 RUN npm run build
 
