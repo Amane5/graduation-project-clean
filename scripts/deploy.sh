@@ -24,6 +24,7 @@ REGISTRY_USER="${REGISTRY_USER:-}"
 CONTAINER_NAME="${CONTAINER_NAME:-graduation-project}"
 HOST_PORT="${HOST_PORT:-3000}"
 CONTAINER_PORT="${CONTAINER_PORT:-3000}"
+NETWORK="${NETWORK:-}"                               # shared docker network to join (e.g. to reach a Postgres container)
 APP_DIR="${APP_DIR:-$HOME/graduation-project}"
 ENV_SRC="${ENV_SRC:-/tmp/graduation-project.env}"   # uploaded by the workflow
 
@@ -60,9 +61,18 @@ docker pull "$IMAGE"
 echo "==> Replacing container '$CONTAINER_NAME'"
 docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 
+# Join a shared network (if configured) so the app can reach other containers
+# — e.g. a Postgres container — by their container name as hostname.
+NET_ARGS=()
+if [ -n "$NETWORK" ]; then
+  docker network create "$NETWORK" >/dev/null 2>&1 || true   # no-op if it already exists
+  NET_ARGS+=(--network "$NETWORK")
+fi
+
 docker run -d \
   --name "$CONTAINER_NAME" \
   --restart unless-stopped \
+  "${NET_ARGS[@]}" \
   --env-file "$ENV_FILE" \
   -p "${HOST_PORT}:${CONTAINER_PORT}" \
   -v "$APP_DIR/uploads:/app/uploads" \

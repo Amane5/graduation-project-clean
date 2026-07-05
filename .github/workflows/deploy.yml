@@ -108,6 +108,7 @@ jobs:
              REGISTRY_USER='${{ github.actor }}' \
              IMAGE='${{ steps.img.outputs.image }}:${{ github.sha }}' \
              HOST_PORT='3001' \
+             NETWORK='appnet' \
              bash /tmp/deploy.sh"
 
       - name: Clean up local secret file
