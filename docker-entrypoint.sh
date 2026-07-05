@@ -7,4 +7,6 @@ echo "==> Applying database migrations (prisma migrate deploy)"
 npx prisma migrate deploy
 
 echo "==> Starting application"
-exec node dist/main.js
+# Root-level .ts files (prisma.config.ts, ApiResponse.ts) push the tsc output
+# root up a level, so the compiled entry lives at dist/src/main.js.
+exec node dist/src/main.js
