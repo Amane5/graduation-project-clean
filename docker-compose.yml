@@ -9,6 +9,8 @@ services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
+    ports:
+      - "5432:5432"
     env_file:
       - .env # provides POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB
     volumes:
