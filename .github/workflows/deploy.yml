@@ -60,57 +60,31 @@ jobs:
           fi
           ssh-keyscan -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
 
-      # ---- Build the runtime .env from GitHub secrets ---------------------
-      # FIREBASE_PRIVATE_KEY must be stored as a single line with literal \n
-      # escapes (the app does .replace(/\\n/g, '\n')). Do NOT quote values:
-      # docker --env-file takes everything after '=' verbatim.
-      - name: Generate runtime .env from secrets
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          VECTOR_STORE_ID: ${{ secrets.VECTOR_STORE_ID }}
-          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
-          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
-          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+      # ---- Ship the compose file to the server ----------------------------
+      # All runtime config lives in ~/graduation-project/.env ON THE SERVER
+      # (you manage it there, not in GitHub). We only sync the compose file.
+      - name: Copy compose file to server
         run: |
-          umask 077
-          {
-            echo "NODE_ENV=production"
-            echo "PORT=3000"
-            echo "OPENAI_API_KEY=${OPENAI_API_KEY}"
-            echo "DATABASE_URL=${DATABASE_URL}"
-            echo "VECTOR_STORE_ID=${VECTOR_STORE_ID}"
-            echo "FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}"
-            echo "FIREBASE_CLIENT_EMAIL=${FIREBASE_CLIENT_EMAIL}"
-            echo "FIREBASE_PRIVATE_KEY=${FIREBASE_PRIVATE_KEY}"
-          } > .env.deploy
-
-      # ---- Ship the deploy script + env to the server ---------------------
-      - name: Copy deploy script and env to server
-        run: |
+          ssh -i ~/.ssh/deploy_key -p "${{ secrets.VPS_PORT }}" \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            "mkdir -p ~/graduation-project/uploads"
           scp -i ~/.ssh/deploy_key -P "${{ secrets.VPS_PORT }}" \
-            scripts/deploy.sh \
-            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/deploy.sh"
-          scp -i ~/.ssh/deploy_key -P "${{ secrets.VPS_PORT }}" \
-            .env.deploy \
-            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/graduation-project.env"
+            docker-compose.yml \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:graduation-project/docker-compose.yml"
 
-      # ---- Run the script on the server: pull the image and run it --------
+      # ---- Deploy via docker compose --------------------------------------
       # The GHCR token is piped over stdin so it never appears in the process
-      # list. Non-secret config is passed as env vars in the remote command.
-      - name: Deploy on server (pull & run)
+      # list. `docker compose pull` needs it to fetch the private app image.
+      - name: Deploy on server (compose pull & up)
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "$GHCR_TOKEN" | ssh -i ~/.ssh/deploy_key -p "${{ secrets.VPS_PORT }}" \
             "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
-            "REGISTRY='${{ env.REGISTRY }}' \
-             REGISTRY_USER='${{ github.actor }}' \
-             IMAGE='${{ steps.img.outputs.image }}:${{ github.sha }}' \
-             HOST_PORT='3001' \
-             NETWORK='appnet' \
-             bash /tmp/deploy.sh"
-
-      - name: Clean up local secret file
-        if: always()
-        run: rm -f .env.deploy
+            "docker login '${{ env.REGISTRY }}' -u '${{ github.actor }}' --password-stdin \
+             && cd ~/graduation-project \
+             && docker compose pull \
+             && docker compose up -d --remove-orphans \
+             && docker image prune -f \
+             && docker logout '${{ env.REGISTRY }}' \
+             && docker compose ps"
