@@ -1,52 +1,109 @@
-name: Deploy NestJS to VPS
+name: Build & Deploy (Docker → GHCR → VPS)
 
 on:
   push:
     branches:
       - main
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }} # owner/repo
+
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # needed to push to GHCR
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      # GHCR requires a fully lowercase image name.
+      - name: Compute image name
+        id: img
+        run: echo "image=${REGISTRY,,}/${IMAGE_NAME,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          node-version: 20
-          cache: npm
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install dependencies
-        run: npm install
+      # ---- Build the image and push it to the registry --------------------
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.img.outputs.image }}:latest
+            ${{ steps.img.outputs.image }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Run build
-        run: npm run build
-
-      - name: Create SSH key
+      # ---- Prepare SSH access to the server -------------------------------
+      - name: Set up SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -p ${{ secrets.VPS_PORT }} ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: Deploy to VPS
+      # ---- Build the runtime .env from GitHub secrets ---------------------
+      # FIREBASE_PRIVATE_KEY must be stored as a single line with literal \n
+      # escapes (the app does .replace(/\\n/g, '\n')). Do NOT quote values:
+      # docker --env-file takes everything after '=' verbatim.
+      - name: Generate runtime .env from secrets
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          VECTOR_STORE_ID: ${{ secrets.VECTOR_STORE_ID }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
         run: |
-          rsync -avz --delete \
-            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.VPS_PORT }}" \
-            ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/nest-app
+          umask 077
+          {
+            echo "NODE_ENV=production"
+            echo "PORT=3000"
+            echo "OPENAI_API_KEY=${OPENAI_API_KEY}"
+            echo "DATABASE_URL=${DATABASE_URL}"
+            echo "VECTOR_STORE_ID=${VECTOR_STORE_ID}"
+            echo "FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}"
+            echo "FIREBASE_CLIENT_EMAIL=${FIREBASE_CLIENT_EMAIL}"
+            echo "FIREBASE_PRIVATE_KEY=${FIREBASE_PRIVATE_KEY}"
+          } > .env.deploy
 
-      - name: Install & restart app on VPS
+      # ---- Ship the deploy script + env to the server ---------------------
+      - name: Copy deploy script and env to server
         run: |
-          ssh -i ~/.ssh/deploy_key -p ${{ secrets.VPS_PORT }} \
-          ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
-            cd /var/www/nest-app
+          scp -i ~/.ssh/deploy_key -P "${{ secrets.VPS_PORT }}" \
+            scripts/deploy.sh \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/deploy.sh"
+          scp -i ~/.ssh/deploy_key -P "${{ secrets.VPS_PORT }}" \
+            .env.deploy \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/graduation-project.env"
 
-            npm install
-            npm run build
+      # ---- Run the script on the server: pull the image and run it --------
+      # The GHCR token is piped over stdin so it never appears in the process
+      # list. Non-secret config is passed as env vars in the remote command.
+      - name: Deploy on server (pull & run)
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GHCR_TOKEN" | ssh -i ~/.ssh/deploy_key -p "${{ secrets.VPS_PORT }}" \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            "REGISTRY='${{ env.REGISTRY }}' \
+             REGISTRY_USER='${{ github.actor }}' \
+             IMAGE='${{ steps.img.outputs.image }}:${{ github.sha }}' \
+             bash /tmp/deploy.sh"
 
-            pm2 restart nest-app || pm2 start dist/main.js --name nest-app
-            pm2 save
-          EOF
+      - name: Clean up local secret file
+        if: always()
+        run: rm -f .env.deploy
