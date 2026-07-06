@@ -1,0 +1,39 @@
+name: graduation-project
+
+# Runtime config comes entirely from the .env file that lives next to this file
+# on the server (you manage it there). Compose reads ./.env automatically as
+# each service's env_file. The app image is built & pushed to GHCR by
+# .github/workflows/deploy.yml; the pipeline just runs `docker compose pull && up`.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    env_file:
+      - .env # provides POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # $$ escapes Compose interpolation so the shell in the container expands it.
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  app:
+    image: ghcr.io/amane5/graduation-project-clean:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy # wait for Postgres before running migrations
+    env_file:
+      - .env # NODE_ENV, PORT, DATABASE_URL, OPENAI_API_KEY, FIREBASE_*, ...
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./uploads:/app/uploads
+
+volumes:
+  pgdata:

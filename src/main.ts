@@ -13,10 +13,7 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
 
-  app.enableCors({
-    origin: ["http://localhost:8080", "http://192.168.0.209:8080", "http://192.168.56.1:8080"],
-    credentials: true,
-  });
+  app.enableCors();
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(new ResponseInterceptor());
   app.useGlobalPipes(new ValidationPipe({
