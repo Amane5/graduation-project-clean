@@ -37,6 +37,14 @@ type AuthenticatedRequest = Request & {
   };
 };
 
+type UploadedAttachment = {
+  kind: 'image' | 'audio' | 'file';
+  name: string;
+  url: string;
+  mimeType: string;
+  description?: string;
+};
+
 @Controller('ai')
 export class AiController {
   constructor(
@@ -60,6 +68,10 @@ export class AiController {
     }
 
     return age;
+  }
+
+  private buildUploadUrl(file: Express.Multer.File): string {
+    return `/uploads/${file.filename}`;
   }
 
   @Post('stream')
@@ -87,6 +99,7 @@ export class AiController {
     let finalQuestion = question || '';
     let imageDescription = '';
     let audioTranscription = '';
+    const uploadedAttachments: UploadedAttachment[] = [];
 
     const userId = req.user.sub;
     console.log(req.user);
@@ -135,9 +148,21 @@ export class AiController {
     if (files && files.length > 0) {
       for (const file of files) {
         console.log(files);
+        const attachment: UploadedAttachment = {
+          kind: file.mimetype.startsWith('image/')
+            ? 'image'
+            : file.mimetype.startsWith('audio/')
+              ? 'audio'
+              : 'file',
+          name: file.originalname,
+          url: this.buildUploadUrl(file),
+          mimeType: file.mimetype,
+        };
+
         // AUDIO
         if (file.mimetype.startsWith('audio')) {
           audioTranscription = await this.aiService.speechToText(file.buffer);
+          attachment.description = audioTranscription;
 
           finalQuestion = [finalQuestion, audioTranscription]
             .filter(Boolean)
@@ -150,11 +175,14 @@ export class AiController {
             file.path,
             Number(age),
           );
+          attachment.description = imageDescription;
 
           finalQuestion = [finalQuestion, imageDescription]
             .filter(Boolean)
             .join(' ');
         }
+
+        uploadedAttachments.push(attachment);
       }
     }
 
@@ -375,8 +403,18 @@ export class AiController {
         conversationId: Number(convId),
         audioUrl,
         imageUrl,
+        imageDescription,
+        voiceText: audioTranscription,
         responseMode: mode,
-        journeyData: mode === 'journey' ? fullText : null,
+        journeyData:
+          mode === 'journey' || uploadedAttachments.length > 0
+            ? {
+                ...(mode === 'journey' ? { content: fullText } : {}),
+                ...(uploadedAttachments.length > 0
+                  ? { attachments: uploadedAttachments }
+                  : {}),
+              }
+            : undefined,
       });
     } catch (error) {
       console.error('Error saving conversation:', error);

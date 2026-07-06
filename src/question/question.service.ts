@@ -6,6 +6,7 @@ import {
   NotFoundException,
   forwardRef,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { AiService } from 'src/ai/ai.service';
 import { AskQuestionDto } from './dto/ask-question.dto';
 import { prisma } from '@/lib/prisma';
@@ -130,10 +131,24 @@ async getConversationMessages(
     conversationId: number;
     audioUrl?: string;
     imageUrl?: string;
+    imageDescription?: string;
+    voiceText?: string;
     responseMode?: string;
-    journeyData?: any;
+    journeyData?:
+      | Prisma.InputJsonValue
+      | Prisma.NullableJsonNullValueInput;
   }) {
-    const { question, answer, conversationId, audioUrl, imageUrl, responseMode, journeyData } = data;
+    const {
+      question,
+      answer,
+      conversationId,
+      audioUrl,
+      imageUrl,
+      imageDescription,
+      voiceText,
+      responseMode,
+      journeyData,
+    } = data;
     const savedQuestion = await prisma.question.create({
       data:{
         question,
@@ -141,6 +156,8 @@ async getConversationMessages(
         conversationId,
         audioUrl,
         imageUrl,
+        imageDescription,
+        voiceText,
         responseMode,
         journeyData
       }
