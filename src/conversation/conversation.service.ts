@@ -1,6 +1,5 @@
 import { prisma } from '@/lib/prisma';
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { CreateConversationDto } from './dto/create-conversation.dto';
 import { AiService } from 'src/ai/ai.service';
 @Injectable()
 export class ConversationService {
@@ -46,22 +45,23 @@ export class ConversationService {
     };
   }
 
-  async deleteConversation(conversationId: number, userId: number) {
+  async deleteConversation(conversationId: number, actorUserId: number) {
     try {
       const conv = await prisma.conversation.findFirst({
-  where: {
-    id: conversationId,
-    userId
-    // OR: [
-    //   { childId: userId },
-    //   {
-    //     child: {
-    //       parentId: userId,
-    //     },
-    //   },
-    // ],
-  },
-});
+        where: {
+          id: conversationId,
+          OR: [
+            {
+              userId: actorUserId,
+            },
+            {
+              user: {
+                parentId: actorUserId,
+              },
+            },
+          ],
+        },
+      });
 
       if (!conv) throw new NotFoundException('Conversation not found');
 

@@ -1,12 +1,12 @@
 import { prisma } from '@/lib/prisma';
 import {
-  ForbiddenException,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { CreateChildDto } from './dto/create-child.dto';
+import { UpdateChildDto } from './dto/update-child.dto';
 import OpenAI from 'openai';
 
 @Injectable()
@@ -14,6 +14,7 @@ export class ChildrenService {
   private openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
   });
+
   async getChildren(parentId: number) {
     const children = await prisma.user.findMany({
       where: {
@@ -25,6 +26,42 @@ export class ChildrenService {
     return {
       message: 'Children fetched successfully',
       data: children,
+    };
+  }
+
+  async getDashboardStats(parentId: number) {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const [totalChildren, questionsToday] = await Promise.all([
+      prisma.user.count({
+        where: {
+          parentId,
+          type: 'child',
+        },
+      }),
+      prisma.question.count({
+        where: {
+          createdAt: {
+            gte: startOfToday,
+          },
+          conversation: {
+            user: {
+              parentId,
+              type: 'child',
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      message: 'Dashboard stats fetched successfully',
+      data: {
+        totalChildren,
+        questionsToday,
+        activeMinutes: null,
+      },
     };
   }
 
@@ -53,7 +90,7 @@ export class ChildrenService {
     };
   }
 
-  async updateChild(childId: number, dto: any, parentId: number) {
+  async updateChild(childId: number, dto: UpdateChildDto, parentId: number) {
     const child = await prisma.user.findFirst({
       where: {
         id: childId,
@@ -69,19 +106,19 @@ export class ChildrenService {
       });
     }
 
-    const data: any = { ...dto };
-
-    //  password
-    if (dto.password) {
-      data.password = await bcrypt.hash(dto.password, 10);
-    } else {
-      delete data.password;
-    }
-
-    //  birthDate
-    if (dto.birthDate) {
-      data.birthDate = new Date(dto.birthDate);
-    }
+    const data = {
+      ...dto,
+      ...(dto.password
+        ? {
+            password: await bcrypt.hash(dto.password, 10),
+          }
+        : {}),
+      ...(dto.birthDate
+        ? {
+            birthDate: new Date(dto.birthDate),
+          }
+        : {}),
+    };
 
     const updated = await prisma.user.update({
       where: { id: childId },
