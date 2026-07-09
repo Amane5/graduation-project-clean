@@ -5,11 +5,11 @@ import { AuthService } from './auth.service';
 import { JwtModule } from '@nestjs/jwt';
 import { EmailService } from '@/email/email.service';
 
-const jwtSecret = "SECRET_KEY";
+const jwtSecret = process.env.JWT_SECRET;
 
-// if (!jwtSecret) {
-//   throw new Error('JWT_SECRET environment variable is required');
-// }
+if (!jwtSecret) {
+  throw new Error('JWT_SECRET environment variable is required');
+}
 
 @Global()
 @Module({
