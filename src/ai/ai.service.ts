@@ -139,6 +139,10 @@ export class AiService {
     console.log('MESSAGES:');
     console.log(JSON.stringify(messages, null, 2));
     console.log('VECTOR STORE:', child?.vectorStoreId);
+    const documentContext = await this.buildDocumentContext(
+      child?.vectorStoreId,
+      question,
+    );
     const systemPrompt = mode === 'journey'
     ? this.buildJourneyPrompt(
         age,
@@ -166,16 +170,6 @@ console.log('SYSTEM PROMPT:');
 console.log(systemPrompt);
     const stream = await this.openai.responses.stream({
       model: 'gpt-4.1',
-      ...(child?.vectorStoreId
-        ? {
-            tools: [
-              {
-                type: 'file_search',
-                vector_store_ids: [child?.vectorStoreId || ''],
-              },
-            ],
-          }
-        : {}),
       input: [
         {
           role: 'system',
@@ -237,6 +231,14 @@ console.log(systemPrompt);
           //   Answer naturally like a teacher talking to a child.
           //   `,
         },
+        ...(documentContext
+          ? [
+              {
+                role: 'system' as const,
+                content: `Use this uploaded knowledge context when it is relevant. If the answer exists in this context, use it.\n\n${documentContext}`,
+              },
+            ]
+          : []),
 
         ...messages,
       ],
@@ -745,6 +747,50 @@ Rules:
 - Keep the tone warm and exciting
 `;
 }
+
+  private async buildDocumentContext(
+    vectorStoreId: string | null | undefined,
+    question: string,
+  ): Promise<string | null> {
+    if (!vectorStoreId) {
+      return null;
+    }
+
+    try {
+      const searchResults = await this.openai.vectorStores.search(
+        vectorStoreId,
+        {
+          query: question,
+          max_num_results: 5,
+        },
+      );
+
+      const snippets = searchResults.data
+        .map((result, index) => {
+          const text = result.content
+            .filter((item) => item.type === 'text')
+            .map((item) => item.text.trim())
+            .filter(Boolean)
+            .join('\n');
+
+          if (!text) {
+            return null;
+          }
+
+          return `Document ${index + 1}:\n${text}`;
+        })
+        .filter((snippet): snippet is string => Boolean(snippet));
+
+      if (!snippets.length) {
+        return null;
+      }
+
+      return snippets.join('\n\n');
+    } catch (error) {
+      console.error('VECTOR SEARCH ERROR:', error);
+      return null;
+    }
+  }
   
   private buildNormalPrompt(
   age: number,
