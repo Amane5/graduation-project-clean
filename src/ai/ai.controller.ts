@@ -184,6 +184,8 @@ export class AiController {
 
         uploadedAttachments.push(attachment);
       }
+
+      console.log('[chat-stream] processed uploaded attachments', uploadedAttachments);
     }
 
     let convId = conversationId;
@@ -355,9 +357,6 @@ export class AiController {
         );
       }
 
-      res.write(`event: done\n`);
-      res.write(`data: done\n\n`);
-
       const finalResponse = await stream.finalResponse();
       const usage = finalResponse.usage;
       console.log(usage);
@@ -397,6 +396,12 @@ export class AiController {
     }
 
     try {
+      console.log('[chat-stream] saving streamed message', {
+        conversationId: Number(convId),
+        imageUrl,
+        audioUrl,
+        uploadedAttachments,
+      });
       await this.questionService.saveAfterStream({
         question: question || '',
         answer: fullText,
@@ -416,9 +421,16 @@ export class AiController {
               }
             : undefined,
       });
+      console.log('[chat-stream] streamed message saved', {
+        conversationId: Number(convId),
+      });
     } catch (error) {
       console.error('Error saving conversation:', error);
     }
+
+    res.write(`event: done\n`);
+    res.write(`data: done\n\n`);
+
     try {
       if (currentUser.fcmToken) {
         await this.firebaseService.sendNotification(
