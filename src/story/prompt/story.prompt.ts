@@ -38,6 +38,13 @@ Rules:
 - Divide the story into scenes
 - Each scene should be short and clear
 
+Language rules:
+- Detect the language used in the educational goal.
+- If the educational goal is written in Arabic, generate the entire story in Arabic.
+- If it is written in English, generate the entire story in English.
+- If it is written in any other language, generate the story in that same language.
+- Never mix multiple languages in the story unless the parent explicitly requests it.
+
 Return ONLY valid JSON.
 
 JSON format:
