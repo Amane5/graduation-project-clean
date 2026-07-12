@@ -199,8 +199,24 @@ export class AiController {
       convId = newConversation.data.id;
     }
 
-    
-    const stream = await this.aiService.streamAnswer(
+    let clientAborted = false;
+    let stream: Awaited<ReturnType<AiService['streamAnswer']>> | null = null;
+
+    const handleClientAbort = () => {
+      if (res.writableEnded || clientAborted) {
+        return;
+      }
+
+      clientAborted = true;
+
+      if (stream && !stream.ended && !stream.aborted) {
+        stream.abort();
+      }
+    };
+
+    req.on('close', handleClientAbort);
+
+    stream = await this.aiService.streamAnswer(
       userId,
       finalQuestion,
       Number(age),
@@ -214,8 +230,6 @@ export class AiController {
       blockedTopics,
       mode,
     );
-
-    
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -232,6 +246,10 @@ export class AiController {
       let parserBuffer = '';
         let currentSection = '';
       for await (const event of stream) {
+        if (clientAborted) {
+          break;
+        }
+
         console.log(event.type);
         if(event.type === 'response.created') {
           res.write(`event: progress\n`);
@@ -317,8 +335,9 @@ export class AiController {
 
       }
 
-      //audio
-      if(currentUser.fcmToken){
+      if (!clientAborted) {
+        // Generate secondary assets only for completed responses.
+        if (currentUser.fcmToken) {
         await this.firebaseService.sendProgressNotification(
         currentUser.fcmToken,
         '🎙️ Generating audio...',
@@ -388,11 +407,14 @@ export class AiController {
       console.log('input tokens:', inputTokens);
       console.log('output tokens:', outputTokens);
       console.log('total tokens:', totalTokens);
+      }
     } catch (error) {
       console.error(error);
 
-      res.write(`event: error\n`);
-      res.write(`data: error\n\n`);
+      if (!clientAborted) {
+        res.write(`event: error\n`);
+        res.write(`data: error\n\n`);
+      }
     }
 
     try {
@@ -428,11 +450,13 @@ export class AiController {
       console.error('Error saving conversation:', error);
     }
 
-    res.write(`event: done\n`);
-    res.write(`data: done\n\n`);
+    if (!clientAborted) {
+      res.write(`event: done\n`);
+      res.write(`data: done\n\n`);
+    }
 
     try {
-      if (currentUser.fcmToken) {
+      if (!clientAborted && currentUser.fcmToken) {
         await this.firebaseService.sendNotification(
           currentUser.fcmToken,
           'AI Response Ready',
@@ -442,7 +466,10 @@ export class AiController {
     } catch (err) {
       console.error('FCM ERROR (ignored):', err);
     }
-    res.end();
+    req.off('close', handleClientAbort);
+    if (!clientAborted && !res.writableEnded) {
+      res.end();
+    }
   }
 
   @Get('me/tokens')

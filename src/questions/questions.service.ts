@@ -67,7 +67,7 @@ export class QuestionsService {
             );
         }
 
-        return prisma.story.update({
+        const updatedStory = await prisma.story.update({
             where: {
             id: storyId,
             },
@@ -76,6 +76,14 @@ export class QuestionsService {
             status: 'PUBLISHED',
             },
         });
+
+        return {
+            message: 'Questions approved',
+            storyId: updatedStory.id,
+            childId: updatedStory.childId,
+            status: updatedStory.status,
+            questionsApproved: updatedStory.questionsApproved,
+        };
     }
 
     async deleteQuestion(parentId:number, questionId:number){

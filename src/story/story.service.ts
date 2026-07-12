@@ -411,6 +411,7 @@ export class StoryService {
     return {
     story: {
       id: updatedStory?.id,
+      childId: updatedStory?.childId,
 
       title: updatedStory?.title,
 
@@ -646,6 +647,7 @@ console.log(sceneAudioFiles);
     return {
         story: {
         id: storyId,
+        childId: currentStory.childId,
 
         title: parsed.title,
 
