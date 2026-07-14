@@ -356,8 +356,18 @@ console.log(systemPrompt);
     const response =
       await this.openai.audio.speech.create({
         model: "gpt-4o-mini-tts",
-        voice: "alloy",
+        voice: "fable",
         input: text,
+        instructions: `
+        Read this as a warm children's storyteller.
+
+        Speak slowly.
+        Use an expressive and playful tone.
+        Sound gentle, cheerful, and engaging.
+        Pause naturally between sentences.
+        Emphasize exciting moments with enthusiasm.
+        Speak as if reading a bedtime story to a young child.
+        `,
       });
 
     const fileName = `audio-${Date.now()}.mp3`;

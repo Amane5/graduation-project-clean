@@ -9,6 +9,7 @@ import { QuestionService } from '@/question/question.service';
 import * as fs from 'fs';
 import { StoryService } from '@/story/story.service';
 import { FirebaseService } from './firebase.service';
+import { progressStatus } from './progress-status';
 
 @Injectable()
 export class DrawingStoryService {
@@ -362,7 +363,7 @@ console.log("RETURNING:", {
         if (currentUser?.fcmToken) {
         await this.firebaseService.sendProgressNotification(
             currentUser.fcmToken,
-            '✍️ Writing story...',
+            progressStatus.WRITING_STORY,
         );
         }
         const aiResponse = await this.aiService.generateStory(storyPrompt);
@@ -380,3 +381,4 @@ console.log("RETURNING:", {
         });
     }
 }
+

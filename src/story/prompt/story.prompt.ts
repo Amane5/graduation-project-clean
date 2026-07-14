@@ -45,6 +45,12 @@ Language rules:
 - If it is written in any other language, generate the story in that same language.
 - Never mix multiple languages in the story unless the parent explicitly requests it.
 
+Gender rules:
+- Always use pronouns and verb conjugations that match the child's gender.
+- If the child is female, always use feminine language.
+- If the child is male, always use masculine language.
+- This rule applies throughout the entire story, including the title, narration, and every scene.
+
 Return ONLY valid JSON.
 
 JSON format:

@@ -29,6 +29,7 @@ import { JsonWebTokenError } from '@nestjs/jwt';
 import { DrawingStoryService } from './drawing-story.service';
 import { StartDrawingStoryDto } from './dto/start-drawing-story.dto';
 import { GenerateDrawingStoryDto } from './dto/generate-drawing-story.dto';
+import { notificationKeys, progressStatus } from './progress-status';
 
 type AuthenticatedRequest = Request & {
   user: {
@@ -255,7 +256,7 @@ export class AiController {
           res.write(`event: progress\n`);
           res.write(
             `data: ${JSON.stringify({
-              step: "AI started writing the story..."
+              stepKey: progressStatus.WRITING_STORY
             })}\n\n`,
           );
         }
@@ -264,7 +265,7 @@ export class AiController {
           res.write(`event: progress\n`);
           res.write(
             `data: ${JSON.stringify({
-              step: "✍️ Writing story scenes..."
+              stepKey: progressStatus.WRITING_SCENES
             })}\n\n`,
           );
         }
@@ -340,7 +341,7 @@ export class AiController {
         if (currentUser.fcmToken) {
         await this.firebaseService.sendProgressNotification(
         currentUser.fcmToken,
-        '🎙️ Generating audio...',
+        progressStatus.GENERATING_AUDIO,
       );
       }
 
@@ -363,7 +364,7 @@ export class AiController {
         if(currentUser.fcmToken){
           await this.firebaseService.sendProgressNotification(
           currentUser.fcmToken,
-          '🎨 Creating illustrations...',
+          progressStatus.GENERATING_IMAGES,
         );
         }
         
@@ -459,8 +460,8 @@ export class AiController {
       if (!clientAborted && currentUser.fcmToken) {
         await this.firebaseService.sendNotification(
           currentUser.fcmToken,
-          'AI Response Ready',
-          'Your Answer Is Ready',
+          notificationKeys.AI_RESPONSE_READY_TITLE,
+          notificationKeys.AI_RESPONSE_READY_BODY,
         );
       }
     } catch (err) {
@@ -537,3 +538,4 @@ export class AiController {
     return this.drawingStoryService.getSession(req.user.sub, Number(id));
 }
 }
+

@@ -6,6 +6,7 @@ import { promptModification, buildStoryPrompt } from './prompt/story.prompt';
 import { UpdateStoryDto } from './Dto/update-story.dto';
 import * as path from "path";
 import { FirebaseService } from '@/ai/firebase.service';
+import { progressStatus } from '@/ai/progress-status';
 
 @Injectable()
 export class StoryService {
@@ -61,7 +62,7 @@ export class StoryService {
     if (currentUser?.fcmToken) {
     await this.firebaseService.sendProgressNotification(
         currentUser.fcmToken,
-        '✍️ Writing story...',
+        progressStatus.WRITING_STORY,
     );
     }
     const aiResponse = await this.aiService.generateStory(prompt);
@@ -100,7 +101,7 @@ export class StoryService {
         if (currentUser?.fcmToken){
             await this.firebaseService.sendProgressNotification(
                 currentUser.fcmToken,
-                '🎨 Creating illustrations...',
+                progressStatus.GENERATING_IMAGES,
             );
         }
     }
@@ -109,7 +110,7 @@ export class StoryService {
     if (currentUser?.fcmToken) {
         await this.firebaseService.sendProgressNotification(
             currentUser.fcmToken,
-            '🎤 Generating narration...',
+            progressStatus.GENERATING_AUDIO,
         );
     }
     }
@@ -829,7 +830,7 @@ console.log(sceneAudioFiles);
         if (currentUser?.fcmToken){
             await this.firebaseService.sendProgressNotification(
                 currentUser.fcmToken,
-                '🎨 Creating illustrations...',
+                progressStatus.GENERATING_IMAGES,
             );
         }
     }
@@ -838,7 +839,7 @@ console.log(sceneAudioFiles);
     if (currentUser?.fcmToken) {
         await this.firebaseService.sendProgressNotification(
             currentUser.fcmToken,
-            '🎤 Generating narration...',
+            progressStatus.GENERATING_AUDIO,
         );
     }
     }
@@ -905,7 +906,7 @@ console.log(sceneAudioFiles);
 if (currentUser?.fcmToken) {
   await this.firebaseService.sendProgressNotification(
     currentUser.fcmToken,
-    "✅ Story completed!"
+    progressStatus.STORY_COMPLETED
   );
 }
 
@@ -915,3 +916,4 @@ return {
 };
 }
 }
+
