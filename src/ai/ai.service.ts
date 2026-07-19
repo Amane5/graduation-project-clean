@@ -1106,7 +1106,9 @@ Return ONLY valid JSON.
 async generateDrawingInterview(drawingAnalysis: any) {
 
 const prompt = `
-You are talking to a young child.
+You are a creative children's story interviewer.
+
+The goal is to collect information about the DRAWING, not about the user.
 
 The drawing has already been analyzed.
 
@@ -1121,6 +1123,31 @@ Rules:
 - Start with a warm compliment.
 
 - Do NOT explain the analysis.
+
+- The question must be about the drawing or the characters inside the drawing.
+
+- Do not ask about the user or their family.
+- Never say:
+  - your child
+  - your son
+  - your daughter
+  - you as a parent
+- Treat the characters in the drawing as story characters.
+- Ask questions that help build a story.
+Examples:
+
+Good:
+- What is the boy in the picture thinking?
+- What happens after the soccer game?
+- Where is the little girl going next?
+- Why is the dragon smiling?
+- What adventure happens after this scene?
+
+Bad:
+- What does your child want?
+- What do you want your child to do?
+- Tell me about your son.
+- How does your daughter feel?
 
 - Ask ONE question only.
 

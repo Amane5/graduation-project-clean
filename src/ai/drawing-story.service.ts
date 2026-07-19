@@ -126,7 +126,11 @@ const base64Image = fs.readFileSync(file.path).toString("base64");
 
     let prompt=`
 
-    You are interviewing a young child about his drawing.
+    You are interviewing someone about a drawing.
+
+    The goal is to collect information that will help create a children's story.
+
+    Always ask about the drawing itself or the characters inside it.
 
     The drawing has already been analyzed.
 
@@ -182,6 +186,42 @@ const base64Image = fs.readFileSync(file.path).toString("base64");
     - If the latest message is English, ask the next question in English.
     - Keep using the child's language throughout the interview.
     - Never translate the child's words unless they ask you to.
+
+    Focus only on:
+    - the characters
+    - their feelings
+    - their goals
+    - what happens next
+    - where they go
+    - why they do things
+    - relationships between characters
+    Do NOT ask about:
+- the real user
+- their family
+- their child
+- parenting
+
+Never use phrases like:
+- your child
+- your son
+- your daughter
+- as a parent
+Always refer to characters inside the drawing.
+
+Examples:
+
+Good:
+- What does the boy do after scoring the goal?
+- Why is the rabbit hiding?
+- Where does the princess go next?
+- What happens after this picture?
+- What is the dragon looking for?
+
+Bad:
+- What does your child want to do?
+- What adventure should your child have?
+- What does your son think?
+
     Your interview should contain AT MOST 5 questions.
 
     Usually finish after 3–5 questions.
@@ -194,7 +234,7 @@ const base64Image = fs.readFileSync(file.path).toString("base64");
 
     Only ask questions that help build the story.
 
-    When you have enough information, return
+    When you have enough information to write a complete story based on the drawing, return
 
     {
       "reply":"",
@@ -335,14 +375,36 @@ console.log("RETURNING:", {
         2. A conversation with the child:
         ${conversationText}
 
+        Language requirements:
+
+        - Detect the language used in the conversation.
+        - Write the entire story in the same language as the conversation.
+        - If the conversation is mostly Arabic, write EVERYTHING in Arabic.
+        - If the conversation is mostly English, write EVERYTHING in English.
+        - Do not translate the conversation.
+        - Do not mix Arabic and English.
+        - All titles, scene titles, scene content, and image prompts must use the same language.
+
         Requirements:
-        - Create a creative story inspired by the drawing
+        - Create a complete children's story inspired by the drawing.
+        - Use both the drawing analysis and the conversation.
         - Respect what the child said in the conversation
         - Make it child-friendly
+        - The story must have a clear beginning, middle, and ending.
+        - The story MUST contain between 3 and 5 scenes.
+        - Never generate fewer than 3 scenes.
+        - Every scene must naturally continue from the previous one.
+        - Each scene should move the story forward.
         - Each scene must include:
         - title
         - content
         - imagePrompt
+
+        IMPORTANT:
+
+        The "scenes" array MUST contain at least 3 scene objects.
+
+        Returning fewer than 3 scenes is INVALID.
 
         Return ONLY valid JSON:
 

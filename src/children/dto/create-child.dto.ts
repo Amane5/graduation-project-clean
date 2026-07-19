@@ -11,10 +11,6 @@ export class CreateChildDto {
   firstName: string;
 
   @IsString()
-  @IsOptional()
-  lastName?: string;
-
-  @IsString()
   @IsNotEmpty()
   @MinLength(6)
   password: string;

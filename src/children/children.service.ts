@@ -165,7 +165,6 @@ export class ChildrenService {
       data: {
         username: dto.username,
         firstName: dto.firstName,
-        lastName: dto.lastName,
         birthDate: dto.birthDate ? new Date(dto.birthDate) : undefined,
         vectorStoreId:vectorStore.id,
         password: hashedPassword,

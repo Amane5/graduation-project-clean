@@ -18,10 +18,6 @@ export class UpdateChildDto {
   firstName: string;
 
   @IsString()
-  @IsOptional()
-  lastName?: string;
-
-  @IsString()
   @MinLength(6)
   @IsOptional()
   password?: string;
