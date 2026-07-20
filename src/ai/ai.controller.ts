@@ -100,7 +100,7 @@ export class AiController {
 
     let finalQuestion = question || '';
     let imageDescription = '';
-    let audioTranscription = '';
+    const audioTranscription = '';
     const uploadedAttachments: UploadedAttachment[] = [];
 
     const userId = req.user.sub;
@@ -655,11 +655,28 @@ export class AiController {
 
   @Post('drawing-story/message')
   @UseGuards(JwtAuthGuard)
-  async sendDrawingStoryMessage(@Req() req: AuthenticatedRequest,@Body() body: { conversationId: number; message: string }) {
+  @UseInterceptors(
+    FilesInterceptor('files', 5, {
+      storage: diskStorage({
+        destination: './uploads',
+        filename: (req, file, cb) => {
+          const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1e9);
+
+          cb(null, uniqueName + extname(file.originalname));
+        },
+      }),
+    }),
+  )
+  async sendDrawingStoryMessage(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: { conversationId: number; message?: string },
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
     return this.drawingStoryService.sendMessage(
       req.user.sub,
-      body.conversationId,
-      body.message,
+      Number(body.conversationId),
+      body.message ?? '',
+      files,
     );
   }
 

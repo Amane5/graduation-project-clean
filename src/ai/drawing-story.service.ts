@@ -11,9 +11,38 @@ import { StoryService } from '@/story/story.service';
 import { FirebaseService } from './firebase.service';
 import { progressStatus } from './progress-status';
 
+type UploadedAttachment = {
+  kind: 'image' | 'audio' | 'file';
+  name: string;
+  url: string;
+  mimeType: string;
+  description?: string;
+};
+
 @Injectable()
 export class DrawingStoryService {
     constructor(private readonly aiService:AiService, private readonly storyService:StoryService, private readonly questionService:QuestionService,private readonly firebaseService:FirebaseService){}
+
+  private calculateAge(birthDate: Date): number {
+    const today = new Date();
+    const birth = new Date(birthDate);
+
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDifference = today.getMonth() - birth.getMonth();
+
+    if (
+      monthDifference < 0 ||
+      (monthDifference === 0 && today.getDate() < birth.getDate())
+    ) {
+      age--;
+    }
+
+    return age;
+  }
+
+  private buildUploadUrl(file: Express.Multer.File): string {
+    return `/uploads/${file.filename}`;
+  }
 
   private async getOwnedSession(childId: number, conversationId: number) {
     const session = await prisma.drawingStorySession.findFirst({
@@ -258,7 +287,12 @@ Bad:
 
 }
 
-    async sendMessage(childId:number,conversationId:number,message:string){
+    async sendMessage(
+      childId:number,
+      conversationId:number,
+      message:string,
+      files: Express.Multer.File[] = [],
+    ){
       console.log(">>>>>>>> SEND MESSAGE CALLED <<<<<<<<");
       const session = await this.getOwnedSession(childId, conversationId);
 
@@ -303,7 +337,41 @@ Bad:
           finished: true,
         };
       }
-    const prompt = this.buildInterviewPrompt(session.drawingAnalysis,history,message);
+    let finalMessage = message || '';
+    const uploadedAttachments: UploadedAttachment[] = [];
+
+    if (files.length > 0) {
+      const child = await prisma.user.findUnique({
+        where: { id: childId },
+        select: { birthDate: true },
+      });
+      const age = child?.birthDate
+        ? this.calculateAge(child.birthDate)
+        : 10;
+
+      for (const file of files) {
+        const attachment: UploadedAttachment = {
+          kind: file.mimetype.startsWith('image/')
+            ? 'image'
+            : file.mimetype.startsWith('audio/')
+              ? 'audio'
+              : 'file',
+          name: file.originalname,
+          url: this.buildUploadUrl(file),
+          mimeType: file.mimetype,
+        };
+
+        if (file.mimetype.startsWith('image/')) {
+          const imageDescription = await this.aiService.analyzeImage(file.path, age);
+          attachment.description = imageDescription;
+          finalMessage = [finalMessage, imageDescription].filter(Boolean).join(' ');
+        }
+
+        uploadedAttachments.push(attachment);
+      }
+    }
+
+    const prompt = this.buildInterviewPrompt(session.drawingAnalysis,history,finalMessage);
     console.log(prompt.length);
     const result= await this.aiService.chatStrict(prompt);
 //     const result = {
@@ -319,6 +387,10 @@ Bad:
 
     conversationId,
     responseMode: 'drawing_story',
+    journeyData:
+      uploadedAttachments.length > 0
+        ? { attachments: uploadedAttachments }
+        : undefined,
 
     });
 
