@@ -14,6 +14,10 @@ async function bootstrap() {
   app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
 
   app.enableCors();
+//   app.enableCors({
+//   origin: 'http://localhost:8080',
+//   credentials: true,
+// });
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(new ResponseInterceptor());
   app.useGlobalPipes(new ValidationPipe({

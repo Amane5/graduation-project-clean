@@ -13,6 +13,7 @@ import {
   Req,
   UploadedFile,
   Param,
+  BadRequestException,
 } from '@nestjs/common';
 import { Response, Request } from 'express';
 import { AiService } from './ai.service';
@@ -30,7 +31,7 @@ import { DrawingStoryService } from './drawing-story.service';
 import { StartDrawingStoryDto } from './dto/start-drawing-story.dto';
 import { GenerateDrawingStoryDto } from './dto/generate-drawing-story.dto';
 import { notificationKeys, progressStatus } from './progress-status';
-
+import { promises as fs } from 'fs';
 type AuthenticatedRequest = Request & {
   user: {
     sub: number;
@@ -161,14 +162,29 @@ export class AiController {
         };
 
         // AUDIO
-        if (file.mimetype.startsWith('audio')) {
-          audioTranscription = await this.aiService.speechToText(file.buffer);
-          attachment.description = audioTranscription;
+        // if (file.mimetype.startsWith('audio')) {
+        //   audioTranscription = await this.aiService.speechToText(file.buffer);
+        //   attachment.description = audioTranscription;
 
-          finalQuestion = [finalQuestion, audioTranscription]
-            .filter(Boolean)
-            .join(' ');
-        }
+        //   finalQuestion = [finalQuestion, audioTranscription]
+        //     .filter(Boolean)
+        //     .join(' ');
+        // }
+        
+        // if (file.mimetype.startsWith('audio/')) {
+        //   const audioBuffer = await fs.readFile(file.path);
+
+        //   audioTranscription = await this.aiService.speechToTextChat(
+        //     audioBuffer,
+        //     file.originalname,
+        //   );
+
+        //   attachment.description = audioTranscription;
+
+        //   finalQuestion = [finalQuestion, audioTranscription]
+        //     .filter(Boolean)
+        //     .join(' ');
+        // }
 
         // IMAGE
         if (file.mimetype.startsWith('image')) {
@@ -289,51 +305,140 @@ export class AiController {
             res.write(`data: ${JSON.stringify(chunk)}\n\n`);
           }
 
+          // if (mode === 'journey') {
+          //   parserBuffer += chunk;
+
+          //   const sections = [
+          //     'TITLE',
+          //     'INTRODUCTION',
+          //     'STORY',
+          //     'EXPLANATION',
+          //     'FACTS',
+          //     'CHALLENGE',
+          //     'QUESTIONS',
+          //     'IMAGE_PROMPT',
+          //   ];
+
+          //   for (const section of sections) {
+          //     const marker = `[[${section}]]`;
+
+          //     if (parserBuffer.includes(marker)) {
+          //       currentSection = section;
+
+          //       parserBuffer = parserBuffer.replace(marker, '');
+
+          //       res.write(`event: journey_section\n`);
+          //       console.log('SECTION FOUND', section);
+          //       res.write(
+          //         `data: ${JSON.stringify({
+          //           section: section.toLowerCase(),
+          //         })}\n\n`,
+          //       );
+          //     }
+          //   }
+
+          //   if (currentSection) {
+          //     res.write(`event: journey_delta\n`);
+
+          //     res.write(
+          //       `data: ${JSON.stringify({
+          //         section: currentSection.toLowerCase(),
+          //         chunk,
+          //       })}\n\n`,
+          //     );
+          //   }
+          // }
           if (mode === 'journey') {
             parserBuffer += chunk;
 
-            const sections = [
-              'TITLE',
-              'INTRODUCTION',
-              'STORY',
-              'EXPLANATION',
-              'FACTS',
-              'CHALLENGE',
-              'QUESTIONS',
-              'IMAGE_PROMPT',
-            ];
+            const markerRegex =
+              /\[\[(TITLE|INTRODUCTION|STORY|EXPLANATION|FACTS|CHALLENGE|QUESTIONS|IMAGE_PROMPT)\]\]/;
 
-            for (const section of sections) {
-              const marker = `[[${section}]]`;
+            while (true) {
+              const match = parserBuffer.match(markerRegex);
 
-              if (parserBuffer.includes(marker)) {
+              if (!match) {
+                break;
+              }
+
+              const markerIndex = match.index!;
+              const marker = match[0];
+              const section = match[1];
+
+              // أي نص قبل الـ marker ينتمي للقسم السابق
+              const textBeforeMarker = parserBuffer
+                .slice(0, markerIndex)
+                .trim();
+
+              if (currentSection && textBeforeMarker) {
+                res.write(`event: journey_delta\n`);
+                res.write(
+                  `data: ${JSON.stringify({
+                    section: currentSection.toLowerCase(),
+                    chunk: textBeforeMarker,
+                  })}\n\n`,
+                );
+              }
+
+                // انتقل للقسم الجديد
                 currentSection = section;
 
-                parserBuffer = parserBuffer.replace(marker, '');
+                console.log('SECTION FOUND:', section);
 
                 res.write(`event: journey_section\n`);
-                console.log('SECTION FOUND', section);
                 res.write(
                   `data: ${JSON.stringify({
                     section: section.toLowerCase(),
                   })}\n\n`,
                 );
+
+                // احذف كل شيء حتى نهاية الـ marker
+                parserBuffer = parserBuffer.slice(
+                  markerIndex + marker.length,
+                );
               }
-            }
 
-            if (currentSection) {
-              res.write(`event: journey_delta\n`);
-
-              res.write(
-                `data: ${JSON.stringify({
-                  section: currentSection.toLowerCase(),
-                  chunk,
-                })}\n\n`,
+              /*
+              * نرسل النص الموجود في buffer فقط إذا كان آمناً
+              * وليس من الممكن أن يكون جزءاً من marker.
+              *
+              * نحتفظ بآخر 20 حرف تقريباً لأن marker أطول من ذلك
+              * وقد يكون مقسماً بين chunkين.
+              */
+              const safeLength = Math.max(
+                0,
+                parserBuffer.length - 20,
               );
-            }
-          }
+
+                const safeText = parserBuffer.slice(0, safeLength);
+
+                if (currentSection && safeText) {
+                  res.write(`event: journey_delta\n`);
+
+                  res.write(
+                    `data: ${JSON.stringify({
+                      section: currentSection.toLowerCase(),
+                      chunk: safeText,
+                    })}\n\n`,
+                  );
+
+                  parserBuffer = parserBuffer.slice(safeLength);
+                }
+              }
         }
 
+      }
+
+      if (mode === 'journey' && !clientAborted) {
+        if (currentSection && parserBuffer.trim()) {
+          res.write(`event: journey_delta\n`);
+          res.write(
+            `data: ${JSON.stringify({
+              section: currentSection.toLowerCase(),
+              chunk: parserBuffer,
+            })}\n\n`,
+          );
+        }
       }
 
       if (!clientAborted) {
@@ -345,7 +450,14 @@ export class AiController {
       );
       }
 
-      const audioFile = await this.aiService.textToSpeechChat(fullText);
+      const cleanTtsText = mode === 'journey' ? fullText
+        .replace(
+          /\[\[(TITLE|INTRODUCTION|STORY|EXPLANATION|FACTS|CHALLENGE|QUESTIONS|IMAGE_PROMPT)\]\]/g,
+          '',
+        )
+        .trim()
+        : fullText;
+      const audioFile = await this.aiService.textToSpeechChat(cleanTtsText);
       audioUrl = `/uploads/${audioFile}`;
       console.log('FINAL AI RESPONSE:');
       console.log(fullText);
@@ -471,6 +583,31 @@ export class AiController {
     if (!clientAborted && !res.writableEnded) {
       res.end();
     }
+  }
+
+  @Post('speech-to-text')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('audio'))
+  async speechToTextChat(
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException(
+        'Audio file is required',
+      );
+    }
+
+    const audioBuffer = file.buffer;
+
+    const text =
+      await this.aiService.speechToTextChat(
+        audioBuffer,
+        file.originalname,
+      );
+
+    return {
+      text,
+    };
   }
 
   @Get('me/tokens')

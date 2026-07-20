@@ -335,6 +335,24 @@ console.log(systemPrompt);
 
     return transcription.text;
   }
+
+  async speechToTextChat(
+  audioBuffer: Buffer,
+  filename = 'answer.webm',
+) {
+  const file = await toFile(
+    audioBuffer,
+    filename,
+  );
+
+  const transcription =
+    await this.openai.audio.transcriptions.create({
+      file,
+      model: 'gpt-4o-mini-transcribe',
+    });
+
+  return transcription.text;
+}
   
   async textToSpeechChat(text: string): Promise<string> {
     const response = await this.openai.audio.speech.create({

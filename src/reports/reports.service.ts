@@ -13,7 +13,13 @@ export class ReportsService {
         }
 
         const reports = await prisma.storyReport.findMany({
-            where:{childId},
+            where:{childId,
+                story:{
+                    storyType: {
+                        not:'drawing'
+                    }
+                }
+            },
             include:{
                 story:true
             },
