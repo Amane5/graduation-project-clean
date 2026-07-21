@@ -3,8 +3,9 @@ import { ChildrenController } from './children.controller';
 import { ChildrenService } from './children.service';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthModule } from '@/auth/auth.module';
+import { AiModule } from '@/ai/ai.module';
 @Module({
-  imports: [AuthModule, JwtModule],
+  imports: [AuthModule, JwtModule, AiModule],
   controllers: [ChildrenController],
   providers: [ChildrenService]
 })

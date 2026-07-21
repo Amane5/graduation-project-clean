@@ -1196,4 +1196,75 @@ console.log(content);
 
 return JSON.parse(content || "{}");
 }
+
+async cartoonizeChildImage(imagePath: string): Promise<string> {
+  try {
+    if (!fs.existsSync(imagePath)) {
+      throw new Error(`Image file not found: ${imagePath}`);
+    }
+
+    const imageBuffer = fs.readFileSync(imagePath);
+
+    const imageFile = await toFile(
+      imageBuffer,
+      'child-image.png',
+      {
+        type: 'image/png',
+      },
+    );
+
+    const response = await this.openai.images.edit({
+      model: 'gpt-image-1',
+      image: imageFile,
+      prompt: `
+Transform this child's photo into a friendly cartoon avatar.
+
+IMPORTANT:
+- Preserve the child's identity and recognizable facial features.
+- Keep the same child, face structure, hairstyle, and overall appearance.
+- Do not change the child's age or gender.
+- Do not add another person.
+- Do not create a completely different character.
+- Use a cute, colorful, child-friendly cartoon illustration style.
+- Keep the child's face clearly recognizable.
+- Remove the original photographic background.
+- Make the background fully transparent.
+- The final image should contain only the cartoonized child.
+- Do not add text, logos, objects, or decorations.
+      `,
+      size: '1024x1024',
+      background: 'transparent',
+    });
+
+    const base64Image = response.data?.[0]?.b64_json;
+
+    if (!base64Image) {
+      throw new Error('OpenAI did not return a generated image');
+    }
+
+    const outputFileName = `cartoon-avatar-${Date.now()}.png`;
+    const outputPath = `./uploads/${outputFileName}`;
+
+    const outputBuffer = Buffer.from(
+      base64Image,
+      'base64',
+    );
+
+    fs.writeFileSync(
+      outputPath,
+      outputBuffer,
+    );
+
+    return `/uploads/${outputFileName}`;
+  } catch (error) {
+    console.error(
+      'CARTOONIZE CHILD IMAGE ERROR:',
+      error,
+    );
+
+    throw new Error(
+      'Failed to cartoonize child image',
+    );
+  }
+}
 }

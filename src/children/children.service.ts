@@ -8,9 +8,12 @@ import * as bcrypt from 'bcrypt';
 import { CreateChildDto } from './dto/create-child.dto';
 import { UpdateChildDto } from './dto/update-child.dto';
 import OpenAI from 'openai';
-
+import { AiService } from '@/ai/ai.service';
+import * as fs from 'fs';
 @Injectable()
 export class ChildrenService {
+  constructor(private readonly aiService: AiService){}
+
   private openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
   });
@@ -206,4 +209,60 @@ export class ChildrenService {
       data,
     };
   }
+
+async cartoonizeChild(
+  childId: number,
+  parentId: number,
+  imagePath: string,
+) {
+  const child = await prisma.user.findFirst({
+    where: {
+      id: childId,
+      parentId,
+      type: 'child',
+    },
+  });
+
+  if (!child) {
+    throw new NotFoundException({
+      message: 'Child not found',
+      error: 'CHILD_NOT_FOUND',
+    });
+  }
+
+  const avatarUrl =
+    await this.aiService.cartoonizeChildImage(
+      imagePath,
+    );
+
+  const updatedChild =
+    await prisma.user.update({
+      where: {
+        id: childId,
+      },
+      data: {
+        avatarUrl,
+      },
+    });
+
+  // حذف الصورة الأصلية بعد نجاح التحويل
+  try {
+    if (fs.existsSync(imagePath)) {
+      fs.unlinkSync(imagePath);
+    }
+  } catch (error) {
+    console.error(
+      'FAILED TO DELETE ORIGINAL IMAGE:',
+      error,
+    );
+  }
+
+  return {
+    message: 'Child avatar created successfully',
+    data: {
+      id: updatedChild.id,
+      avatarUrl: updatedChild.avatarUrl,
+    },
+  };
+}
 }

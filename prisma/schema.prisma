@@ -25,6 +25,8 @@ model User {
   birthDate DateTime?
   parentId  Int?
 
+  avatarUrl String?
+
   parent        User?          @relation("ParentChildren", fields: [parentId], references: [id])
   children      User[]         @relation("ParentChildren")
   fcmToken      String?

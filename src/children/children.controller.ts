@@ -1,5 +1,6 @@
 import { JwtAuthGuard } from '@/auth/guards/jwt.guard';
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -8,14 +9,21 @@ import {
   Param,
   Post,
   Put,
+  UploadedFile,
   Req,
   UseGuards,
+  UseInterceptors,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { UpdateChildDto } from './dto/update-child.dto';
 import { ChildrenService } from './children.service';
 import { CreateChildDto } from './dto/create-child.dto';
 import { RolesGuard } from '@/auth/guards/roles.guard';
+import { extname } from 'path/win32';
 import { Roles } from '@/auth/decorators/roles.decorators';
+import { FileInterceptor } from '@nestjs/platform-express/multer/interceptors/file.interceptor';
+import { diskStorage } from 'multer';
+import { AiService } from '@/ai/ai.service';
 
 type AuthenticatedRequest = {
   user: {
@@ -79,4 +87,41 @@ export class ChildrenController {
     console.log('USER:', req.user);
     return this.childrenService.getAccount(req.user.sub);
   }
+
+ @Post(':id/cartoonize')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('parent')
+@UseInterceptors(
+  FileInterceptor('image', {
+    storage: diskStorage({
+      destination: './uploads',
+      filename: (req, file, cb) => {
+        const uniqueName =
+          Date.now() + '-' + Math.round(Math.random() * 1e9);
+
+        cb(
+          null,
+          uniqueName + extname(file.originalname),
+        );
+      },
+    }),
+  }),
+)
+async cartoonize(
+  @Param('id', ParseIntPipe) childId: number,
+  @Req() req: AuthenticatedRequest,
+  @UploadedFile() file: Express.Multer.File,
+) {
+  if (!file) {
+    throw new BadRequestException(
+      'Image is required',
+    );
+  }
+
+  return this.childrenService.cartoonizeChild(
+    childId,
+    req.user.sub,
+    file.path,
+  );
+}
 }

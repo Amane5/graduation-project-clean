@@ -14,6 +14,8 @@ export class UserMapper {
         interests: user.interests,
         gender:user.gender,
         blockedTopics: user.blockedTopics,
+
+        avatarUrl: user.avatarUrl,
       };
     }
   }
