@@ -909,65 +909,118 @@ async questionTextToSpeech(text: string) {
   };
 }
 
-async classifyAnalytics(question: string, answer: string) {
+async classifyAnalytics(question: string, answer: string, language: string = 'en',) {
   return this.openai.chat.completions.create({
     model: 'gpt-4.1-mini',
     messages: [
       {
         role: 'system',
         content: `
-        You are a STRICT child learning analytics engine.
+You are a STRICT child learning analytics engine.
 
-        RULES:
-        - DO NOT guess
-        - DO NOT hallucinate
-        - If data is insufficient → return empty values
-        - Only extract observable signals
+Your task is to analyze a child's answer and evaluate three learning traits:
 
-        emotionalSignal:
+1. Curiosity
+2. Creativity
+3. Analytical thinking
 
-        Allowed values only:
+The application language is: ${language}
 
-        happy
-        curious
-        excited
-        frustrated
-        confused
-        sad
-        anxious
-        neutral
+IMPORTANT:
+- Generate all human-readable text in the application language.
+- The following fields must use the application language:
+  - category
+  - subcategory
+  - curiosityReason
+  - creativityReason
+  - analyticalReason
+  - emotionalSignal
 
-        If not enough evidence:
-        return empty string
+RULES:
 
-        Return ONLY valid JSON:
+- DO NOT guess.
+- DO NOT hallucinate.
+- Use ONLY observable evidence from the child's question and answer.
+- Scores must be integers from 0 to 5.
+- If there is not enough evidence to evaluate a trait, give it a score of 0.
+- The reason must directly explain why the score was given.
+- The reason must be based ONLY on the child's actual response.
+- Keep each reason to one short sentence.
+- Do not mention internal AI reasoning.
+- Do not mention "the model".
+- Do not mention analytics.
+- Do not exaggerate the child's abilities.
+- The explanation language MUST be: ${language}.
 
-        {
-        "category": "",
-        "subcategory": "",
-        "curiosityScore": 0,
-        "creativityScore": 0,
-        "analyticalScore": 0,
-        "emotionalSignal": "",
-        "skills": []
-        }
-            `,
+Score meaning:
+
+0 = No observable evidence or insufficient information.
+1 = Very limited evidence.
+2 = Some weak evidence.
+3 = Moderate evidence.
+4 = Strong evidence.
+5 = Very strong and clear evidence.
+
+For each trait:
+- Give a score from 0 to 5.
+- Give a short explanation for that exact score.
+
+emotionalSignal allowed values only:
+
+happy
+curious
+excited
+frustrated
+confused
+sad
+anxious
+neutral
+
+If there is not enough emotional evidence:
+return an empty string.
+
+Return ONLY valid JSON.
+
+{
+  "category": "",
+  "subcategory": "",
+
+  "curiosityScore": 0,
+  "curiosityReason": "",
+
+  "creativityScore": 0,
+  "creativityReason": "",
+
+  "analyticalScore": 0,
+  "analyticalReason": "",
+
+  "emotionalSignal": "",
+  "skills": []
+}
+        `,
       },
       {
         role: 'user',
         content: `Question: ${question}\nAnswer: ${answer}`,
+
       },
     ],
+    response_format: {
+      type: 'json_object',
+    },
   });
 }
 
-async generateRecommendations(report: any): Promise<string[]> {
+async generateRecommendations(report: any, language: string,): Promise<string[]> {
   const response = await this.openai.chat.completions.create({
     model: 'gpt-4.1-mini',
     messages: [
       {
         role: 'system',
         content: `
+        The application language is: ${language}
+
+Generate all recommendations in this language.
 You are a parenting expert.
 
 RULES:
@@ -1265,6 +1318,94 @@ IMPORTANT:
     throw new Error(
       'Failed to cartoonize child image',
     );
+  }
+}
+
+async generateAnalyticsExplanations(
+  data: {
+    curiosityAvg: number;
+    creativityAvg: number;
+    analyticalAvg: number;
+
+    curiosityReasons: string[];
+    creativityReasons: string[];
+    analyticalReasons: string[];
+
+    totalQuestions: number;
+  },
+  language: string = 'en',
+) {
+  const response = await this.openai.chat.completions.create({
+    model: 'gpt-4.1-mini',
+
+    messages: [
+      {
+        role: 'system',
+        content: `
+You are a child learning analytics expert.
+
+Your task is to explain a child's learning profile based ONLY on the provided analytics data.
+
+You must explain:
+
+1. Curiosity
+2. Creativity
+3. Analytical thinking
+
+RULES:
+
+- Use ONLY the provided data.
+- Do NOT invent behaviors that are not supported by the data.
+- Do NOT diagnose the child.
+- Do NOT make medical or psychological claims.
+- Do NOT use negative or judgmental language.
+- Be clear and parent-friendly.
+- Each explanation should be one or two short sentences.
+- The explanation must directly relate to the score.
+- Mention observable patterns when available.
+- If evidence is insufficient, clearly say that there is not enough evidence yet.
+- The explanation language MUST be: ${language}.
+
+Score meaning:
+
+0 = No observable evidence or insufficient information.
+1 = Very limited evidence.
+2 = Some weak evidence.
+3 = Moderate evidence.
+4 = Strong evidence.
+5 = Very strong and clear evidence.
+
+Return ONLY valid JSON:
+
+{
+  "curiosityExplanation": "",
+  "creativityExplanation": "",
+  "analyticalExplanation": ""
+}
+        `,
+      },
+      {
+        role: 'user',
+        content: JSON.stringify(data),
+      },
+    ],
+
+    response_format: {
+      type: 'json_object',
+    },
+  });
+
+  const content =
+    response.choices[0].message.content || '{}';
+
+  try {
+    return JSON.parse(content);
+  } catch {
+    return {
+      curiosityExplanation: null,
+      creativityExplanation: null,
+      analyticalExplanation: null,
+    };
   }
 }
 }

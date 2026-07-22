@@ -1,6 +1,6 @@
 import { JwtAuthGuard } from '@/auth/guards/jwt.guard';
 import { prisma } from '@/lib/prisma';
-import { Controller, ForbiddenException, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { AggregationService } from './aggregation.service';
 
 @Controller('analytics')
@@ -29,9 +29,11 @@ export class AnalyticsController {
     }
 
     @Post('generate/:childId')
-async generate(@Param('childId') childId: string) {
-  return this.aggregationService.generateDailyReport(
-    Number(childId),
-  );
-}
+    async generate(@Param('childId') childId: string,  @Body() body: { language?: string },) {
+      return this.aggregationService.generateDailyReport(
+        Number(childId), body.language || 'en',
+      );
+    }
+
+
 }

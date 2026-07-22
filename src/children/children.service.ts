@@ -93,6 +93,28 @@ export class ChildrenService {
     };
   }
 
+  async getChildById(childId: number, parentId: number) {
+    const child = await prisma.user.findFirst({
+      where: {
+        id: childId,
+        parentId,
+        type: 'child',
+      },
+    });
+
+    if (!child) {
+      throw new NotFoundException({
+        message: 'Child not found',
+        error: 'CHILD_NOT_FOUND',
+      });
+    }
+
+    return {
+      message: 'Child fetched successfully',
+      data: child,
+    };
+  }
+
   async updateChild(childId: number, dto: UpdateChildDto, parentId: number) {
     const child = await prisma.user.findFirst({
       where: {

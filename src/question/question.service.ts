@@ -122,6 +122,10 @@ async getConversationMessages(
   return {
     message: 'messages fetched',
     data: messages,
+    conversation: {
+    id: conversation.id,
+    userId: conversation.userId,
+  },
   };
 }
 

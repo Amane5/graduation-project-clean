@@ -23,7 +23,6 @@ import { extname } from 'path/win32';
 import { Roles } from '@/auth/decorators/roles.decorators';
 import { FileInterceptor } from '@nestjs/platform-express/multer/interceptors/file.interceptor';
 import { diskStorage } from 'multer';
-import { AiService } from '@/ai/ai.service';
 
 type AuthenticatedRequest = {
   user: {
@@ -86,6 +85,13 @@ export class ChildrenController {
     }
     console.log('USER:', req.user);
     return this.childrenService.getAccount(req.user.sub);
+  }
+
+  @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('parent')
+  getChildById(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    return this.childrenService.getChildById(Number(id), req.user.sub);
   }
 
  @Post(':id/cartoonize')

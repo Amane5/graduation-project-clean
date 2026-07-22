@@ -9,7 +9,7 @@ export class AggregationService {
     RecommendationService,
 ) {}
 
-  async generateDailyReport(childId: number) {
+  async generateDailyReport(childId: number, language: string = 'en',) {
     console.log('GENERATE REPORT START', childId);
 
     const analytics = await prisma.questionAnalytics.findMany({
@@ -32,6 +32,15 @@ export class AggregationService {
     const creativityAvg = avg(analytics.map(a => a.creativityScore));
     const analyticalAvg = avg(analytics.map(a => a.analyticalScore));
 
+    const explanations =
+    await this.recommendationService.generateAnalyticsExplanations(
+        analytics,
+        curiosityAvg,
+        creativityAvg,
+        analyticalAvg,
+        language,
+    );
+
     const categoryMap: Record<string, number> = {};
 
     for (const a of analytics) {
@@ -44,7 +53,7 @@ export class AggregationService {
     .slice(0, 5)
     .map(([k]) => k);
 
-    const emotionalSummary = await this.recommendationService.generateEmotionSummary(analytics);
+    const emotionalSummary = await this.recommendationService.generateEmotionSummary(analytics, language);
     const subMap: Record<string, number> = {};
 
     for (const a of analytics) {
@@ -64,7 +73,7 @@ export class AggregationService {
     },
     });
 
-    await prisma.childDailyReport.create({
+    const report = await prisma.childDailyReport.create({
     data: {
         childId,
         topCategories,
@@ -74,6 +83,15 @@ export class AggregationService {
         creativityAvg,
         analyticalAvg,
 
+        curiosityExplanation:
+          explanations.curiosityExplanation || null,
+
+        creativityExplanation:
+          explanations.creativityExplanation || null,
+
+        analyticalExplanation:
+          explanations.analyticalExplanation || null,
+
         emotionalSummary,
         insights: {
         totalQuestions: analytics.length,
@@ -81,7 +99,7 @@ export class AggregationService {
     },
     });
 
-    await this.recommendationService.generate(childId);
-
+    await this.recommendationService.generate(childId, language);
+    return report
   }
 }

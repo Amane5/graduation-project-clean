@@ -354,6 +354,10 @@ model QuestionAnalytics {
   creativityScore Int @default(0)
   analyticalScore Int @default(0)
 
+  curiosityReason String?
+  creativityReason String?
+  analyticalReason String?
+
   emotionalSignal String?
 
   skills String[]
@@ -372,6 +376,10 @@ model ChildDailyReport {
   curiosityAvg Float
   creativityAvg Float
   analyticalAvg Float
+
+  curiosityExplanation String?
+  creativityExplanation String?
+  analyticalExplanation String?
 
   emotionalSummary String?
   recommendations String[]

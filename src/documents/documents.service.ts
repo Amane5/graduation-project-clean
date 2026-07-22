@@ -41,6 +41,8 @@ export class DocumentsService {
         if (!file) {
             throw new BadRequestException('File upload is required');
         }
+        
+  console.log('ORIGINAL FILE NAME:', file.originalname);
 
         const { childIds: authorizedChildIds, children } = await this.getAuthorizedChildren(parentId, childIds);
 
@@ -63,7 +65,7 @@ export class DocumentsService {
         
         const document = await prisma.document.create({
             data: {
-                title: file.originalname,
+                title: Buffer.from(file.originalname, 'latin1').toString('utf8'),
                 fileName: file.filename,
                 fileUrl: file.path,
 

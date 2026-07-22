@@ -24,6 +24,7 @@ export class AnalyticsService {
         const response = await this.ai.classifyAnalytics(
         question.question,
         question.answer,
+        // language,
         );
 
         let data;
@@ -41,8 +42,13 @@ export class AnalyticsService {
             subcategory: data.subcategory || null,
 
             curiosityScore: data.curiosityScore ?? 0,
+            curiosityReason: data.curiosityReason || null,
+
             creativityScore: data.creativityScore ?? 0,
+            creativityReason: data.creativityReason || null,
+
             analyticalScore: data.analyticalScore ?? 0,
+            analyticalReason: data.analyticalReason || null,
 
             emotionalSignal: data.emotionalSignal || null,
             skills: data.skills || [],
